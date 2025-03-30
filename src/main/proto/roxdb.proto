@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package com.github.lukaszbudnik.roxdb.proto;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+
+option java_multiple_files = true;
+
+// Key structure
+message Key {
+  string partition_key = 1;
+  string sort_key = 2;
+}
+
+// Item structure using google.protobuf.Struct for dynamic attributes
+message Item {
+  Key key = 1;
+  google.protobuf.Struct attributes = 2;
+}
+
+// Success structure
+message Success {
+}
+
+// Error structure
+message Error {
+  string message = 3;
+  int32 code = 4;
+}
+
+// Put item request
+message PutItemRequest {
+  string correlation_id = 1;
+  string table_name = 2;
+  Item item = 3;
+}
+
+message PutItemResponse {
+  string correlation_id = 1;
+  oneof result {
+    Success success = 2;
+    Error error = 3;
+  }
+}
+
+// Get item request
+message GetItemRequest {
+  string correlation_id = 1;
+  string table_name = 2;
+  Key key = 3;
+}
+
+// Get item response
+message GetItemResponse {
+  string correlation_id = 1;
+  oneof result {
+    Item item = 2;
+    ItemNotFound not_found = 3;
+    Error error = 4;
+  }
+  message ItemNotFound {
+  }
+}
+
+// Query request
+message QueryRequest {
+  string correlation_id = 1;
+  string table_name = 2;
+  Key key_start = 3;
+  optional Key key_end = 4;
+}
+
+// Query response
+message QueryResponse {
+  string correlation_id = 1;
+  oneof result {
+    ItemsResult items_result = 2;
+    Error error = 3;
+  }
+  message ItemsResult {
+    repeated Item items = 1;
+  }
+}
+
+// Service definition
+service RoxDB {
+  rpc PutItem(stream PutItemRequest) returns (stream PutItemResponse) {}
+  rpc GetItem(stream GetItemRequest) returns (stream GetItemResponse) {}
+  rpc Query(stream QueryRequest) returns (stream QueryResponse) {}
+}

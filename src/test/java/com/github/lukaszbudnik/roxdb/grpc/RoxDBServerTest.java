@@ -50,26 +50,26 @@ class RoxDBServerTest {
     }
 
     @Test
-    void testPutItem() throws Exception {
+    void testServer() throws Exception {
         // Prepare test data
         String partitionKey = "test-key";
         String sortKey = "test-value";
         String tableName = "test";
         Key key  = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
         UUID putItemId = UUID.randomUUID();
-        Map<String, PutItemResponse> responses = new HashMap<>();
+        Map<String, ItemResponse> responses = new HashMap<>();
 
-        PutItemRequest putRequest = PutItemRequest.newBuilder()
+        ItemRequest putRequest = ItemRequest.newBuilder()
                 .setCorrelationId(putItemId.toString())
                 .setTableName(tableName)
-                .setItem(Item.newBuilder().setKey(key).build())
+                .setPutItem(ItemRequest.PutItem.newBuilder().setItem(Item.newBuilder().setKey(key).build()).build())
             .build();
 
         // connect to gRPC server and send putRequest
         CountDownLatch latch = new CountDownLatch(1);
-        StreamObserver<PutItemRequest> putItemRequestStreamObserver = asyncStub.putItem(new StreamObserver<PutItemResponse>() {
+        StreamObserver<ItemRequest> putItemRequestStreamObserver = asyncStub.processItems(new StreamObserver<ItemResponse>() {
             @Override
-            public void onNext(PutItemResponse response) {
+            public void onNext(ItemResponse response) {
                 responses.put(response.getCorrelationId(), response);
                 latch.countDown();
             }
@@ -89,7 +89,7 @@ class RoxDBServerTest {
         putItemRequestStreamObserver.onCompleted();
         boolean await = latch.await(5, TimeUnit.SECONDS);
         assertTrue(await, "Timeout waiting for response");
-        PutItemResponse response = responses.get(putItemId.toString());
+        ItemResponse response = responses.get(putItemId.toString());
         assertTrue(response.hasSuccess());
         assertEquals(putItemId.toString(), response.getCorrelationId());
     }

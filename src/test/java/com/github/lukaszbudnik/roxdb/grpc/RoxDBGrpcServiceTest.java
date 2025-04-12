@@ -63,17 +63,17 @@ class RoxDBGrpcServiceTest {
     void crud() throws InterruptedException {
         // 2 GetItem operations
         CountDownLatch latch = new CountDownLatch(2);
-        Map<String, PutItemResponse> putItemResponses = new HashMap<>();
-        Map<String, GetItemResponse> receivedItems = new HashMap<>();
+        Map<String, ItemResponse> putDeleteItemResponses = new HashMap<>();
+        Map<String, ItemResponse> receivedItems = new HashMap<>();
         List<Throwable> errors = new ArrayList<>();
 
         UUID putItemId = UUID.randomUUID();
         UUID getItemId = UUID.randomUUID();
+        UUID deleteItemId = UUID.randomUUID();
         UUID getItemNotFoundId = UUID.randomUUID();
 
         // TODO
-        // 1. update operation + 3rd get
-        // 2. delete operation
+        // 1. update operation + 2nd get
 
         // Create test data
         String tableName = "test-table";
@@ -86,10 +86,10 @@ class RoxDBGrpcServiceTest {
         attributes.put("field3", true);
 
         // Setup streaming observer for receiving responses
-        StreamObserver<PutItemResponse> responseObserver = new StreamObserver<PutItemResponse>() {
+        StreamObserver<ItemResponse> responseObserver = new StreamObserver<ItemResponse>() {
             @Override
-            public void onNext(PutItemResponse response) {
-                putItemResponses.put(response.getCorrelationId(), response);
+            public void onNext(ItemResponse response) {
+                putDeleteItemResponses.put(response.getCorrelationId(), response);
             }
 
             @Override
@@ -103,11 +103,11 @@ class RoxDBGrpcServiceTest {
         };
 
         // Start bidirectional streaming
-        StreamObserver<PutItemRequest> requestObserver = asyncStub.putItem(responseObserver);
+        StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
 
-        StreamObserver<GetItemResponse> responseObserverGetItem = new StreamObserver<GetItemResponse>() {
+        StreamObserver<ItemResponse> responseObserverGetItem = new StreamObserver<ItemResponse>() {
             @Override
-            public void onNext(GetItemResponse response) {
+            public void onNext(ItemResponse response) {
                 receivedItems.put(response.getCorrelationId(), response);
                 latch.countDown();
             }
@@ -123,37 +123,58 @@ class RoxDBGrpcServiceTest {
         };
 
         // Start bidirectional streaming
-        StreamObserver<GetItemRequest> requestObserverGetItem = asyncStub.getItem(responseObserverGetItem);
+        StreamObserver<ItemRequest> requestObserverGetItem = asyncStub.processItems(responseObserverGetItem);
 
         try {
             // Send PutItem request
-            PutItemRequest putRequest = PutItemRequest.newBuilder()
+            ItemRequest putRequest = ItemRequest.newBuilder()
                     .setCorrelationId(putItemId.toString())
                     .setTableName(tableName)
-                    .setItem(createTestItem(partitionKey, sortKey, attributes))
-                    .build();
+                    .setPutItem(ItemRequest.PutItem.newBuilder()
+                            .setItem(createTestItem(partitionKey, sortKey, attributes)
+                            ).build()
+                    ).build();
             requestObserver.onNext(putRequest);
 
             // Send GetItem request
-            GetItemRequest getRequest = GetItemRequest.newBuilder()
+            ItemRequest getRequest = ItemRequest.newBuilder()
                     .setCorrelationId(getItemId.toString())
                     .setTableName(tableName)
-                    .setKey(Key.newBuilder()
-                            .setPartitionKey(partitionKey)
-                            .setSortKey(sortKey)
-                            .build())
+                    .setGetItem(ItemRequest.GetItem.newBuilder()
+                            .setKey(Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build()
+                            ).build()
+
+                    )
                     .build();
             requestObserverGetItem.onNext(getRequest);
 
-            // Seng GetItem request for non-existing item
-            GetItemRequest getRequestNotFound = GetItemRequest.newBuilder()
+            // Send DeleteItem request
+            ItemRequest deleteRequest = ItemRequest.newBuilder()
+                    .setCorrelationId(deleteItemId.toString())
+                    .setTableName(tableName)
+                    .setDeleteItem(ItemRequest.DeleteItem.newBuilder()
+                            .setKey(Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build()
+                            ).build()
+                    ).build();
+            requestObserver.onNext(deleteRequest);
+
+            // Seng GetItem request for non-existing deleted item
+            ItemRequest getRequestNotFound = ItemRequest.newBuilder()
                     .setCorrelationId(getItemNotFoundId.toString())
                     .setTableName(tableName)
-                    .setKey(Key.newBuilder()
-                            .setPartitionKey(partitionKey)
-                            .setSortKey("non-existing")
-                            .build())
-                    .build();
+                    .setGetItem(ItemRequest.GetItem.newBuilder()
+                            .setKey(Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build()
+                            ).build()
+                    ).build();
             requestObserverGetItem.onNext(getRequestNotFound);
 
             // Complete the request stream
@@ -167,25 +188,29 @@ class RoxDBGrpcServiceTest {
             assertTrue(errors.isEmpty(), "Unexpected errors: " + errors);
 
             // Verify PutItem
-            assertEquals(1, putItemResponses.size(), "Expected one put item response");
-            PutItemResponse putItemResponse = putItemResponses.get(putItemId.toString());
+            ItemResponse putItemResponse = putDeleteItemResponses.get(putItemId.toString());
             assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
             assertTrue(putItemResponse.hasSuccess());
 
             // Verify GetItem
-            GetItemResponse receivedItem = receivedItems.get(getItemId.toString());
-            assertTrue(receivedItem.hasItem(), "Expected to get received item for " + getItemId);
+            ItemResponse receivedItem = receivedItems.get(getItemId.toString());
+            assertTrue(receivedItem.hasItemResult(), "Expected to get received item for " + getItemId);
             // Verify Key
-            assertEquals(partitionKey, receivedItem.getItem().getKey().getPartitionKey());
-            assertEquals(sortKey, receivedItem.getItem().getKey().getSortKey());
+            assertEquals(partitionKey, receivedItem.getItemResult().getItem().getKey().getPartitionKey());
+            assertEquals(sortKey, receivedItem.getItemResult().getItem().getKey().getSortKey());
             // Verify attributes
-            Struct receivedAttributes = receivedItem.getItem().getAttributes();
+            Struct receivedAttributes = receivedItem.getItemResult().getItem().getAttributes();
             assertEquals("value1", receivedAttributes.getFieldsOrThrow("field1").getStringValue());
             assertEquals(123.0, receivedAttributes.getFieldsOrThrow("field2").getNumberValue());
             assertTrue(receivedAttributes.getFieldsOrThrow("field3").getBoolValue());
 
+            // Verity DeleteItem
+            ItemResponse deleteItemResponse = putDeleteItemResponses.get(deleteItemId.toString());
+            assertEquals(deleteItemId.toString(), deleteItemResponse.getCorrelationId());
+            assertTrue(deleteItemResponse.hasSuccess());
+
             // Verify GetItem - not found
-            GetItemResponse notFoundItem = receivedItems.get(getItemNotFoundId.toString());
+            ItemResponse notFoundItem = receivedItems.get(getItemNotFoundId.toString());
             assertTrue(notFoundItem.hasNotFound(), "Expected to not get receive item for " + getItemNotFoundId);
         } catch (Exception e) {
             requestObserver.onError(e);

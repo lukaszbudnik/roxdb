@@ -19,73 +19,72 @@ message Item {
   google.protobuf.Struct attributes = 2;
 }
 
-// Success structure
-message Success {
-}
-
-// Error structure
-message Error {
-  string message = 3;
-  int32 code = 4;
-}
-
-// Put item request
-message PutItemRequest {
+message ItemRequest {
   string correlation_id = 1;
   string table_name = 2;
-  Item item = 3;
+  oneof operation {
+    PutItem put_item = 3;
+    GetItem get_item = 4;
+    DeleteItem delete_item = 5;
+    QueryItems query_items = 6;
+  }
+
+  message PutItem {
+    Item item = 1;
+  }
+
+  message GetItem {
+    Key key = 1;
+  }
+
+  message DeleteItem {
+    Key key = 1;
+  }
+
+  message QueryItems {
+    Key key_start = 1;
+    optional Key key_end = 2;
+  }
 }
 
-message PutItemResponse {
+message ItemResponse {
   string correlation_id = 1;
   oneof result {
-    Success success = 2;
-    Error error = 3;
+    // Response to GetItem
+    ItemResult item_result = 3;
+    // Response to QueryItems
+    ItemsResult items_result = 4;
+    // Response to GetItem when item not found
+    ItemNotFound not_found = 5;
+    // Success and Error are responses to PutItem and DeleteItem
+    Success success = 6;
+    Error error = 7;
   }
-}
 
-// Get item request
-message GetItemRequest {
-  string correlation_id = 1;
-  string table_name = 2;
-  Key key = 3;
-}
-
-// Get item response
-message GetItemResponse {
-  string correlation_id = 1;
-  oneof result {
-    Item item = 2;
-    ItemNotFound not_found = 3;
-    Error error = 4;
+  // Success structure
+  message Success {
   }
-  message ItemNotFound {
-  }
-}
 
-// Query request
-message QueryRequest {
-  string correlation_id = 1;
-  string table_name = 2;
-  Key key_start = 3;
-  optional Key key_end = 4;
-}
-
-// Query response
-message QueryResponse {
-  string correlation_id = 1;
-  oneof result {
-    ItemsResult items_result = 2;
-    Error error = 3;
+  // Error structure
+  message Error {
+    string message = 1;
+    int32 code = 2;
   }
+
+  message ItemResult {
+    Item item = 1;
+  }
+
   message ItemsResult {
     repeated Item items = 1;
+  }
+
+  message ItemNotFound {
+    Key key = 1;
   }
 }
 
 // Service definition
 service RoxDB {
-  rpc PutItem(stream PutItemRequest) returns (stream PutItemResponse) {}
-  rpc GetItem(stream GetItemRequest) returns (stream GetItemResponse) {}
-  rpc Query(stream QueryRequest) returns (stream QueryResponse) {}
+  rpc ProcessItems(stream ItemRequest) returns (stream ItemResponse) {}
 }

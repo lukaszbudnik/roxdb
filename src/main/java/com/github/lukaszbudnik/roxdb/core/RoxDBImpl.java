@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.util.*;
 
 public class RoxDBImpl implements RoxDB {
+    private static final Logger log = LoggerFactory.getLogger(RoxDBImpl.class);
+
     static {
         RocksDB.loadLibrary();
     }
@@ -21,8 +23,6 @@ public class RoxDBImpl implements RoxDB {
     private final ObjectMapper objectMapper;
     private final DBOptions dbOptions;
     private final List<ColumnFamilyHandle> columnFamilyHandles;
-
-    private static final Logger log = LoggerFactory.getLogger(RoxDBImpl.class);
 
     public RoxDBImpl(String dbPath) throws RocksDBException {
         this.dbPath = dbPath;

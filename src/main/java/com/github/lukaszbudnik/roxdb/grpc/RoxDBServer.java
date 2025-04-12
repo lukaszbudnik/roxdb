@@ -12,8 +12,8 @@ public class RoxDBServer {
 
     public RoxDBServer(int port, RoxDB roxDB) {
         this.server = ServerBuilder.forPort(port)
-                .addService(new RoxDBGrpcService(roxDB))
-                .build();
+                                   .addService(new RoxDBGrpcService(roxDB))
+                                   .build();
     }
 
     public void start() throws IOException {

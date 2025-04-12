@@ -46,7 +46,7 @@ This project was born out of the desire to explore alternative storage solutions
 2.  **Build the project:**
 
     ```bash
-    ./gradlew test
+    ./gradlew build
     ```
 
 ## Contributing

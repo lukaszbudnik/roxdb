@@ -28,8 +28,9 @@ public class ProtoUtils {
             case BOOL_VALUE -> value.getBoolValue();
             case STRUCT_VALUE -> structToMap(value.getStructValue());
             case LIST_VALUE -> value.getListValue().getValuesList().stream()
-                    .map(ProtoUtils::valueToObject)
-                    .collect(Collectors.toList());
+                                    .map(ProtoUtils::valueToObject)
+                                    .collect(Collectors.toList())
+            ;
             case NULL_VALUE -> null;
             default -> throw new IllegalArgumentException("Unsupported value type: " + value.getKindCase());
         };
@@ -67,11 +68,11 @@ public class ProtoUtils {
 
     public static Item itemToProto(com.github.lukaszbudnik.roxdb.core.Item item) {
         return Item.newBuilder()
-                .setKey(Key.newBuilder()
-                        .setPartitionKey(item.key().partitionKey())
-                        .setSortKey(item.key().sortKey())
-                        .build())
-                .setAttributes(ProtoUtils.mapToStruct(item.attributes()))
-                .build();
+                   .setKey(Key.newBuilder()
+                              .setPartitionKey(item.key().partitionKey())
+                              .setSortKey(item.key().sortKey())
+                              .build())
+                   .setAttributes(ProtoUtils.mapToStruct(item.attributes()))
+                   .build();
     }
 }

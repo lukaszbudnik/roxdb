@@ -23,7 +23,7 @@ class RoxDBServerTest {
     private static String dbPath;
     private static io.grpc.Channel channel;
     private static RoxDBGrpc.RoxDBStub asyncStub;
-    private static int port = 50052;
+    private static final int port = 50052;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -36,8 +36,8 @@ class RoxDBServerTest {
         server.start();
         // create channel to server
         channel = io.grpc.ManagedChannelBuilder.forAddress("localhost", port)
-                .usePlaintext()
-                .build();
+                                               .usePlaintext()
+                                               .build();
         // Initialize the async stub
         asyncStub = RoxDBGrpc.newStub(channel);
     }
@@ -50,26 +50,27 @@ class RoxDBServerTest {
     }
 
     @Test
-    void testPutItem() throws Exception {
+    void testServer() throws Exception {
         // Prepare test data
         String partitionKey = "test-key";
         String sortKey = "test-value";
         String tableName = "test";
-        Key key  = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
+        Key key = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
         UUID putItemId = UUID.randomUUID();
-        Map<String, PutItemResponse> responses = new HashMap<>();
+        Map<String, ItemResponse> responses = new HashMap<>();
 
-        PutItemRequest putRequest = PutItemRequest.newBuilder()
-                .setCorrelationId(putItemId.toString())
-                .setTableName(tableName)
-                .setItem(Item.newBuilder().setKey(key).build())
-            .build();
+        ItemRequest putRequest = ItemRequest.newBuilder()
+                                            .setCorrelationId(putItemId.toString())
+                                            .setTable(tableName)
+                                            .setPutItem(ItemRequest.PutItem.newBuilder().setItem(Item.newBuilder().setKey(key).build()).build())
+                                            .build()
+                ;
 
         // connect to gRPC server and send putRequest
         CountDownLatch latch = new CountDownLatch(1);
-        StreamObserver<PutItemRequest> putItemRequestStreamObserver = asyncStub.putItem(new StreamObserver<PutItemResponse>() {
+        StreamObserver<ItemRequest> putItemRequestStreamObserver = asyncStub.processItems(new StreamObserver<ItemResponse>() {
             @Override
-            public void onNext(PutItemResponse response) {
+            public void onNext(ItemResponse response) {
                 responses.put(response.getCorrelationId(), response);
                 latch.countDown();
             }
@@ -89,8 +90,8 @@ class RoxDBServerTest {
         putItemRequestStreamObserver.onCompleted();
         boolean await = latch.await(5, TimeUnit.SECONDS);
         assertTrue(await, "Timeout waiting for response");
-        PutItemResponse response = responses.get(putItemId.toString());
-        assertTrue(response.hasSuccess());
+        ItemResponse response = responses.get(putItemId.toString());
+        assertTrue(response.hasPutItemResponse(), "Response should have a putItemResponse");
         assertEquals(putItemId.toString(), response.getCorrelationId());
     }
 

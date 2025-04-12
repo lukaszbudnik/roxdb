@@ -19,73 +19,92 @@ message Item {
   google.protobuf.Struct attributes = 2;
 }
 
-// Success structure
-message Success {
-}
-
-// Error structure
-message Error {
-  string message = 3;
-  int32 code = 4;
-}
-
-// Put item request
-message PutItemRequest {
+message ItemRequest {
   string correlation_id = 1;
-  string table_name = 2;
-  Item item = 3;
+  string table = 2;
+  oneof operation {
+    PutItem put_item = 3;
+    GetItem get_item = 4;
+    DeleteItem delete_item = 5;
+    Query query = 6;
+  }
+
+  message PutItem {
+    Item item = 1;
+  }
+
+  message GetItem {
+    Key key = 1;
+  }
+
+  message DeleteItem {
+    Key key = 1;
+  }
+
+  message Query {
+    string partition_key = 1;
+    optional string sort_key_start = 2;
+    optional string sort_key_end = 3;
+  }
 }
 
-message PutItemResponse {
+message ItemResponse {
   string correlation_id = 1;
   oneof result {
-    Success success = 2;
-    Error error = 3;
+    // Response to PutItem
+    PutItemResponse put_item_response = 2;
+    // Response to GetItem
+    GetItemResponse get_item_response = 3;
+    // Response to DeleteItem
+    DeleteItemResponse delete_item_response = 4;
+    // Response to Query
+    QueryResponse query_response = 5;
+    // Error
+    Error error = 7;
   }
-}
 
-// Get item request
-message GetItemRequest {
-  string correlation_id = 1;
-  string table_name = 2;
-  Key key = 3;
-}
+  // Error structure
+  message Error {
+    string message = 1;
+    int32 code = 2;
+  }
 
-// Get item response
-message GetItemResponse {
-  string correlation_id = 1;
-  oneof result {
-    Item item = 2;
-    ItemNotFound not_found = 3;
-    Error error = 4;
-  }
-  message ItemNotFound {
-  }
-}
+  message GetItemResponse {
+    oneof result {
+      Item item = 1;
+      ItemNotFound item_not_found = 2;
+    }
 
-// Query request
-message QueryRequest {
-  string correlation_id = 1;
-  string table_name = 2;
-  Key key_start = 3;
-  optional Key key_end = 4;
-}
+    message ItemNotFound {
+      Key key = 1;
+    }
+  }
 
-// Query response
-message QueryResponse {
-  string correlation_id = 1;
-  oneof result {
-    ItemsResult items_result = 2;
-    Error error = 3;
+  message QueryResponse {
+    oneof result {
+      ItemsQueryResult items_query_result = 1;
+    }
+
+    message ItemsQueryResult {
+      repeated Item items = 1;
+    }
   }
-  message ItemsResult {
-    repeated Item items = 1;
+
+  message PutItemResponse {
+    oneof result {
+      Key key = 1;
+    }
   }
+
+  message DeleteItemResponse {
+    oneof result {
+      Key key = 1;
+    }
+  }
+
 }
 
 // Service definition
 service RoxDB {
-  rpc PutItem(stream PutItemRequest) returns (stream PutItemResponse) {}
-  rpc GetItem(stream GetItemRequest) returns (stream GetItemResponse) {}
-  rpc Query(stream QueryRequest) returns (stream QueryResponse) {}
+  rpc ProcessItems(stream ItemRequest) returns (stream ItemResponse) {}
 }

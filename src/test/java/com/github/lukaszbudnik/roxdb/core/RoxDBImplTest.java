@@ -17,10 +17,9 @@ import java.util.Optional;
 
 class RoxDBImplTest {
 
+    private static final Logger log = LoggerFactory.getLogger(RoxDBImplTest.class);
     private String dbPath = null;
     private RoxDBImpl roxdb = null;
-
-    private static final Logger log = LoggerFactory.getLogger(RoxDBImplTest.class);
 
     @BeforeEach
     void setUp() throws RocksDBException {

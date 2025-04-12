@@ -21,12 +21,12 @@ message Item {
 
 message ItemRequest {
   string correlation_id = 1;
-  string table_name = 2;
+  string table = 2;
   oneof operation {
     PutItem put_item = 3;
     GetItem get_item = 4;
     DeleteItem delete_item = 5;
-    QueryItems query_items = 6;
+    Query query = 6;
   }
 
   message PutItem {
@@ -41,28 +41,26 @@ message ItemRequest {
     Key key = 1;
   }
 
-  message QueryItems {
-    Key key_start = 1;
-    optional Key key_end = 2;
+  message Query {
+    string partition_key = 1;
+    optional string sort_key_start = 2;
+    optional string sort_key_end = 3;
   }
 }
 
 message ItemResponse {
   string correlation_id = 1;
   oneof result {
+    // Response to PutItem
+    PutItemResponse put_item_response = 2;
     // Response to GetItem
-    ItemResult item_result = 3;
-    // Response to QueryItems
-    ItemsResult items_result = 4;
-    // Response to GetItem when item not found
-    ItemNotFound not_found = 5;
-    // Success and Error are responses to PutItem and DeleteItem
-    Success success = 6;
+    GetItemResponse get_item_response = 3;
+    // Response to DeleteItem
+    DeleteItemResponse delete_item_response = 4;
+    // Response to Query
+    QueryResponse query_response = 5;
+    // Error
     Error error = 7;
-  }
-
-  // Success structure
-  message Success {
   }
 
   // Error structure
@@ -71,17 +69,39 @@ message ItemResponse {
     int32 code = 2;
   }
 
-  message ItemResult {
-    Item item = 1;
+  message GetItemResponse {
+    oneof result {
+      Item item = 1;
+      ItemNotFound item_not_found = 2;
+    }
+
+    message ItemNotFound {
+      Key key = 1;
+    }
   }
 
-  message ItemsResult {
-    repeated Item items = 1;
+  message QueryResponse {
+    oneof result {
+      ItemsQueryResult items_query_result = 1;
+    }
+
+    message ItemsQueryResult {
+      repeated Item items = 1;
+    }
   }
 
-  message ItemNotFound {
-    Key key = 1;
+  message PutItemResponse {
+    oneof result {
+      Key key = 1;
+    }
   }
+
+  message DeleteItemResponse {
+    oneof result {
+      Key key = 1;
+    }
+  }
+
 }
 
 // Service definition

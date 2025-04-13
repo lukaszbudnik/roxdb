@@ -20,7 +20,7 @@ repositories {
 dependencies {
     implementation("org.rocksdb:rocksdbjni:9.10.0")
     implementation("org.msgpack:jackson-dataformat-msgpack:0.9.9")
-    implementation("commons-io:commons-io:2.15.1")
+    implementation("commons-io:commons-io:2.19.0")
 
     implementation("com.google.protobuf:protobuf-java:4.30.2")
     implementation("com.google.protobuf:protobuf-java-util:4.30.2")

@@ -1,4 +1,4 @@
-package com.github.lukaszbudnik.roxdb.core;
+package com.github.lukaszbudnik.roxdb.api;
 
 import org.rocksdb.RocksDBException;
 

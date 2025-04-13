@@ -1,5 +1,7 @@
-package com.github.lukaszbudnik.roxdb.core;
+package com.github.lukaszbudnik.roxdb.db;
 
+import com.github.lukaszbudnik.roxdb.api.Item;
+import com.github.lukaszbudnik.roxdb.api.Key;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;

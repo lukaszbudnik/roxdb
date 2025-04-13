@@ -49,6 +49,21 @@ This project was born out of the desire to explore alternative storage solutions
     ./gradlew build
     ```
 
+### Running the Server
+
+1.  **Start the RoxDB server:**
+
+    ```bash
+    # Run with defaults
+    java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+    # Run with custom port
+    ROXDB_PORT=50052 java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+    # Run with custom db path
+    ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+    # Run with both custom port and db path
+    ROXDB_PORT=50052 ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+    ```
+
 ## Contributing
 
 Contributions are welcome! Please follow these steps:

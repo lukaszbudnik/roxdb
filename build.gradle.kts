@@ -2,10 +2,16 @@ plugins {
     id("java")
     id("com.google.protobuf") version("0.9.4")
     id("jacoco")
+    id("application")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "com.github.lukaszbudnik"
 version = "1.0-SNAPSHOT"
+
+application {
+    mainClass.set("com.github.lukaszbudnik.roxdb.application.Application")
+}
 
 repositories {
     mavenCentral()
@@ -24,11 +30,11 @@ dependencies {
     implementation("javax.annotation:javax.annotation-api:1.3.2")
 
     implementation("org.slf4j:slf4j-api:2.0.17")
+    implementation("ch.qos.logback:logback-classic:1.5.18")
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.grpc:grpc-inprocess:1.71.0")
-    testImplementation("ch.qos.logback:logback-classic:1.5.18")
 }
 
 java {
@@ -70,6 +76,7 @@ tasks.test {
 tasks.test {
     finalizedBy(tasks.jacocoTestReport)
 }
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
 
@@ -83,3 +90,4 @@ tasks.jacocoTestReport {
         })
     )
 }
+

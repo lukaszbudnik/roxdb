@@ -1,6 +1,6 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.core.RoxDBImpl;
+import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
 import com.github.lukaszbudnik.roxdb.proto.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.commons.io.FileUtils;
@@ -18,12 +18,12 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RoxDBServerTest {
+    private static final int port = 50052;
     private static RoxDBServer server;
     private static RoxDBImpl roxDB;
     private static String dbPath;
     private static io.grpc.Channel channel;
     private static RoxDBGrpc.RoxDBStub asyncStub;
-    private static final int port = 50052;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -44,7 +44,7 @@ class RoxDBServerTest {
 
     @AfterAll
     static void tearDown() throws Exception {
-        server.shutdown();
+        server.stop();
         roxDB.close();
         FileUtils.deleteDirectory(new File(dbPath));
     }

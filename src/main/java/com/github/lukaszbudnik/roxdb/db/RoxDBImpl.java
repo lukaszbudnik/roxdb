@@ -1,7 +1,10 @@
-package com.github.lukaszbudnik.roxdb.core;
+package com.github.lukaszbudnik.roxdb.db;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.lukaszbudnik.roxdb.api.Item;
+import com.github.lukaszbudnik.roxdb.api.Key;
+import com.github.lukaszbudnik.roxdb.api.RoxDB;
 import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.rocksdb.*;
 import org.slf4j.Logger;
@@ -11,7 +14,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class RoxDBImpl implements RoxDB {
-    private static final Logger log = LoggerFactory.getLogger(RoxDBImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(RoxDBImpl.class);
 
     static {
         RocksDB.loadLibrary();
@@ -25,6 +28,8 @@ public class RoxDBImpl implements RoxDB {
     private final List<ColumnFamilyHandle> columnFamilyHandles;
 
     public RoxDBImpl(String dbPath) throws RocksDBException {
+        logger.info("Initializing RocksDB instance at {}", dbPath);
+
         this.dbPath = dbPath;
 
         // Initialize column families
@@ -60,6 +65,8 @@ public class RoxDBImpl implements RoxDB {
         }
 
         this.objectMapper = new ObjectMapper(new MessagePackFactory());
+
+        logger.info("RocksDB instance initialized");
     }
 
     private ColumnFamilyHandle getOrCreateColumnFamily(String tableName) throws RocksDBException {
@@ -85,14 +92,14 @@ public class RoxDBImpl implements RoxDB {
         try {
             value = objectMapper.writeValueAsBytes(item.attributes());
         } catch (JsonProcessingException e) {
-            log.error("Error serializing item: {}", item.key().toStorageKey(), e);
+            logger.error("Error serializing item: {}", item.key().toStorageKey(), e);
             throw new RuntimeException(e);
         }
 
         // Store in RocksDB
         db.put(cfHandle, key, value);
 
-        log.debug("Item written: {}", item.key().toStorageKey());
+        logger.debug("Item written: {}", item.key().toStorageKey());
     }
 
     // GetItem operation
@@ -104,7 +111,7 @@ public class RoxDBImpl implements RoxDB {
         byte[] value = db.get(cfHandle, key.toStorageKey().getBytes());
 
         if (value == null) {
-            log.debug("Item not found: {}", key.toStorageKey());
+            logger.debug("Item not found: {}", key.toStorageKey());
             return null;
         }
 
@@ -116,7 +123,7 @@ public class RoxDBImpl implements RoxDB {
             throw new RuntimeException(e);
         }
         Item item = new Item(key, attributes);
-        log.debug("Item found: {}", item.key().toStorageKey());
+        logger.debug("Item found: {}", item.key().toStorageKey());
         return item;
     }
 
@@ -167,7 +174,7 @@ public class RoxDBImpl implements RoxDB {
             }
         }
 
-        log.debug("QueryResults for: {}#{}-{} found items: {}", partitionKey, sortKeyStart, sortKeyEnd, results.size());
+        logger.debug("QueryResults for: {}#{}-{} found items: {}", partitionKey, sortKeyStart, sortKeyEnd, results.size());
 
         return results;
     }
@@ -176,11 +183,12 @@ public class RoxDBImpl implements RoxDB {
     public void deleteItem(String tableName, Key key) throws RocksDBException {
         ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
         db.delete(cfHandle, key.toStorageKey().getBytes());
-        log.debug("Deleted: {}", key.toStorageKey());
+        logger.debug("Deleted: {}", key.toStorageKey());
     }
 
     @Override
     public void close() {
+        logger.info("Closing RocksDB instance");
         // Close all column family handles
         for (ColumnFamilyHandle handle : columnFamilyHandles) {
             handle.close();
@@ -189,6 +197,7 @@ public class RoxDBImpl implements RoxDB {
         db.close();
         // Close DB options
         dbOptions.close();
+        logger.info("RocksDB instance closed successfully");
     }
 
 }

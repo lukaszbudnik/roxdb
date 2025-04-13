@@ -1,4 +1,4 @@
-package com.github.lukaszbudnik.roxdb.core;
+package com.github.lukaszbudnik.roxdb.api;
 
 public record Key(String partitionKey, String sortKey) {
     public String toStorageKey() {

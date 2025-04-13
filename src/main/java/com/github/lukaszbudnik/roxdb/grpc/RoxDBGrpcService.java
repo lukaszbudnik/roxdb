@@ -1,6 +1,8 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.core.RoxDB;
+import com.github.lukaszbudnik.roxdb.api.Item;
+import com.github.lukaszbudnik.roxdb.api.Key;
+import com.github.lukaszbudnik.roxdb.api.RoxDB;
 import com.github.lukaszbudnik.roxdb.proto.ItemRequest;
 import com.github.lukaszbudnik.roxdb.proto.ItemResponse;
 import com.github.lukaszbudnik.roxdb.proto.RoxDBGrpc;
@@ -65,8 +67,8 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
         var protoItem = putItem.getItem();
         var tableName = itemRequest.getTable();
         Map<String, Object> attributes = ProtoUtils.structToMap(protoItem.getAttributes());
-        var key = new com.github.lukaszbudnik.roxdb.core.Key(protoItem.getKey().getPartitionKey(), protoItem.getKey().getSortKey());
-        var item = new com.github.lukaszbudnik.roxdb.core.Item(key, attributes);
+        var key = new Key(protoItem.getKey().getPartitionKey(), protoItem.getKey().getSortKey());
+        var item = new Item(key, attributes);
         roxDB.putItem(tableName, item);
         responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setPutItemResponse(ItemResponse.PutItemResponse.newBuilder().setKey(protoItem.getKey()).build()).build());
     }
@@ -74,7 +76,7 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
     private void getItem(StreamObserver<ItemResponse> responseObserver, ItemRequest itemRequest) throws RocksDBException {
         String tableName = itemRequest.getTable();
         var getItemRequest = itemRequest.getGetItem();
-        var key = new com.github.lukaszbudnik.roxdb.core.Key(getItemRequest.getKey().getPartitionKey(), getItemRequest.getKey().getSortKey());
+        var key = new Key(getItemRequest.getKey().getPartitionKey(), getItemRequest.getKey().getSortKey());
         var item = roxDB.getItem(tableName, key);
         if (item == null) {
             responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setGetItemResponse(ItemResponse.GetItemResponse.newBuilder().setItemNotFound(ItemResponse.GetItemResponse.ItemNotFound.newBuilder().setKey(getItemRequest.getKey()).build()).build()).build());
@@ -87,7 +89,7 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
     private void deleteItem(StreamObserver<ItemResponse> responseObserver, ItemRequest itemRequest) throws RocksDBException {
         String tableName = itemRequest.getTable();
         var deleteItemRequest = itemRequest.getDeleteItem();
-        var key = new com.github.lukaszbudnik.roxdb.core.Key(deleteItemRequest.getKey().getPartitionKey(), deleteItemRequest.getKey().getSortKey());
+        var key = new Key(deleteItemRequest.getKey().getPartitionKey(), deleteItemRequest.getKey().getSortKey());
         roxDB.deleteItem(tableName, key);
         responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setDeleteItemResponse(ItemResponse.DeleteItemResponse.newBuilder().setKey(deleteItemRequest.getKey()).build()).build());
     }

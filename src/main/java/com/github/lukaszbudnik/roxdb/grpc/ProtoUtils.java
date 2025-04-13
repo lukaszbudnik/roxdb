@@ -66,7 +66,7 @@ public class ProtoUtils {
         throw new IllegalArgumentException("Unsupported type: " + obj.getClass());
     }
 
-    public static Item itemToProto(com.github.lukaszbudnik.roxdb.core.Item item) {
+    public static Item itemToProto(com.github.lukaszbudnik.roxdb.api.Item item) {
         return Item.newBuilder()
                    .setKey(Key.newBuilder()
                               .setPartitionKey(item.key().partitionKey())

@@ -1,15 +1,16 @@
 package com.github.lukaszbudnik.roxdb.db;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.github.lukaszbudnik.roxdb.api.Item;
 import com.github.lukaszbudnik.roxdb.api.Key;
 import com.github.lukaszbudnik.roxdb.api.RoxDB;
-import org.msgpack.jackson.dataformat.MessagePackFactory;
 import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 
@@ -23,7 +24,7 @@ public class RoxDBImpl implements RoxDB {
     private final String dbPath;
     private final RocksDB db;
     private final Map<String, ColumnFamilyHandle> columnFamilies;
-    private final ObjectMapper objectMapper;
+    private final Kryo kryo;
     private final DBOptions dbOptions;
     private final List<ColumnFamilyHandle> columnFamilyHandles;
 
@@ -64,7 +65,8 @@ public class RoxDBImpl implements RoxDB {
             columnFamilies.put(cfName, columnFamilyHandles.get(i));
         }
 
-        this.objectMapper = new ObjectMapper(new MessagePackFactory());
+        this.kryo = new Kryo();
+        this.kryo.register(HashMap.class);
 
         logger.info("RocksDB instance initialized");
     }
@@ -89,9 +91,12 @@ public class RoxDBImpl implements RoxDB {
         byte[] key = item.key().toStorageKey().getBytes();
         // Convert attributes to bytes
         byte[] value = null;
-        try {
-            value = objectMapper.writeValueAsBytes(item.attributes());
-        } catch (JsonProcessingException e) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); Output output = new Output(baos)) {
+            kryo.writeObject(output, item.attributes());
+            // needs explicit flush
+            output.flush();
+            value = baos.toByteArray();
+        } catch (IOException e) {
             logger.error("Error serializing item: {}", item.key().toStorageKey(), e);
             throw new RuntimeException(e);
         }
@@ -117,10 +122,8 @@ public class RoxDBImpl implements RoxDB {
 
         // Convert bytes to Map
         Map<String, Object> attributes = null;
-        try {
-            attributes = objectMapper.readValue(value, Map.class);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        try (Input input = new Input(value)) {
+            attributes = kryo.readObject(input, HashMap.class);
         }
         Item item = new Item(key, attributes);
         logger.debug("Item found: {}", item.key().toStorageKey());
@@ -162,10 +165,8 @@ public class RoxDBImpl implements RoxDB {
 
                 // Add matching item to results
                 Map<String, Object> attributes = null;
-                try {
-                    attributes = objectMapper.readValue(iterator.value(), Map.class);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                try (Input input = new Input(iterator.value())) {
+                    attributes = kryo.readObject(input, HashMap.class);
                 }
 
                 results.add(new Item(new Key(partitionKey, currentSortKey), attributes));

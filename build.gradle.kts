@@ -3,7 +3,7 @@ plugins {
     id("com.google.protobuf") version("0.9.4")
     id("jacoco")
     id("application")
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("com.gradleup.shadow") version "8.3.6"
 }
 
 group = "com.github.lukaszbudnik"
@@ -19,7 +19,7 @@ repositories {
 
 dependencies {
     implementation("org.rocksdb:rocksdbjni:9.10.0")
-    implementation("org.msgpack:jackson-dataformat-msgpack:0.9.9")
+    implementation("com.esotericsoftware:kryo:5.6.2")
     implementation("commons-io:commons-io:2.19.0")
 
     implementation("com.google.protobuf:protobuf-java:4.30.2")
@@ -32,8 +32,9 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.17")
     implementation("ch.qos.logback:logback-classic:1.5.18")
 
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
+    testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.grpc:grpc-inprocess:1.71.0")
 }
 

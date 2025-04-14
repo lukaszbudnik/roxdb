@@ -14,21 +14,20 @@ public class RoxDBServer {
 
     private final int port;
     private final RoxDB roxDB;
-    private Server server;
+    private final Server server;
 
     public RoxDBServer(int port, RoxDB roxDB) {
         this.port = port;
         this.roxDB = roxDB;
-        this.server = null;
+        this.server = ServerBuilder.forPort(port)
+                                   .addService(new RoxDBGrpcService(roxDB))
+                                   .build();
     }
 
     public void start() throws IOException {
         logger.info("Starting server on port {}", port);
 
-        server = ServerBuilder.forPort(port)
-                              .addService(new RoxDBGrpcService(roxDB))
-                              .build()
-                              .start();
+        server.start();
 
         logger.info("Server started, listening on port {}", port);
     }

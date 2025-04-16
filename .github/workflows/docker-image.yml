@@ -20,6 +20,5 @@ jobs:
       - name: Build with Gradle Wrapper
         run: ./gradlew build
 
-      - uses: actions/checkout@v4
       - name: Build the Docker image
         run: docker build --build-arg ROXDB_VERSION=1.0-SNAPSHOT --file Dockerfile --tag roxdb:latest .

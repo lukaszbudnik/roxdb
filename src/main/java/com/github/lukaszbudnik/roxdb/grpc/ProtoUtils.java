@@ -1,7 +1,7 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.proto.Item;
-import com.github.lukaszbudnik.roxdb.proto.Key;
+import com.github.lukaszbudnik.roxdb.v1.Item;
+import com.github.lukaszbudnik.roxdb.v1.Key;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;

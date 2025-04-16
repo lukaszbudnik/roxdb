@@ -25,6 +25,8 @@ This project was born out of the desire to explore alternative storage solutions
 * **RocksDB Storage:** Utilizing RocksDB for fast and reliable data storage.
 * **gRPC Interface:** Providing a high-performance gRPC API for client interactions.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
+* **Containerization & Orchestration:** Docker container support for easy deployment, quick-start Kubernetes manifests provided
+
 
 ## Getting Started
 
@@ -51,7 +53,7 @@ This project was born out of the desire to explore alternative storage solutions
 
 ### Running the Server
 
-1.  **Start the RoxDB server:**
+1.  **Start the RoxDB Java app:**
 
     ```bash
     # Run with defaults
@@ -62,6 +64,84 @@ This project was born out of the desire to explore alternative storage solutions
     ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
     # Run with both custom port and db path
     ROXDB_PORT=50052 ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+    ```
+
+2.  **Or build and start the RoxDB container:**
+
+    ```bash
+    # Build the Docker image and pass ROXDB_VERSION build argument
+    docker build --build-arg ROXDB_VERSION=1.0-SNAPSHOT -t roxdb .
+    # Run with default db path
+    docker run -P roxdb
+    # Run with custom db path/volume
+    docker run -P -e ROXDB_DB_PATH=/data/roxdb roxdb
+    ```
+
+3.  **Or deploy RoxDB service to Kubernetes:**
+
+    See [kubernetes/README.md](kubernetes/README.md).
+
+4.  **Test:**
+
+    Using [grpcurl](https://github.com/fullstorydev/grpcurl):
+
+    ```bash
+    export ROXDB_ENDPOINT=localhost:50051
+    # Describe the service
+    grpcurl -plaintext ${ROXDB_ENDPOINT} describe com.github.lukaszbudnik.roxdb.v1.RoxDB
+    # Check service health
+    grpcurl -plaintext -d '{"service": "com.github.lukaszbudnik.roxdb.v1.RoxDB"}' ${ROXDB_ENDPOINT} grpc.health.v1.Health/Check
+    # Stream PutItem, GetItem, DeleteItem, and one more GetItem in a single call
+    grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
+    {
+      "correlation_id": "123",
+      "table": "your-table-name",
+      "put_item": {
+        "item": {
+          "key": {
+            "partition_key": "part1",
+            "sort_key": "sort1"
+          },
+          "attributes": {
+            "fields": {
+              "field1": "value1",
+              "field2": 123
+            }
+          }
+        }
+      }
+    }
+    {
+      "correlation_id": "124",
+      "table": "your-table-name",
+      "get_item": {
+        "key": {
+          "partition_key": "part1",
+          "sort_key": "sort1"
+        }
+      }
+    }
+    {
+      "correlation_id": "125",
+      "table": "your-table-name",
+      "delete_item": {
+        "key": {
+          "partition_key": "part1",
+          "sort_key": "sort1"
+        }
+      }
+    }
+    {
+      "correlation_id": "126",
+      "table": "your-table-name",
+      "get_item": {
+        "key": {
+          "partition_key": "part1",
+          "sort_key": "sort1"
+        }
+      }
+    }
+    EOM
     ```
 
 ## Contributing
@@ -90,4 +170,3 @@ This project is licensed under the Apache 2.0 License. See the `LICENSE` file fo
 * Future features or improvements: global secondary indexes, enhanced consistency.
 * Add more DynamoDB API implementations: `TransactWriteItems`.
 * Improve performance and scalability.
-* Kubernetes deployment.

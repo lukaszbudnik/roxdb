@@ -1,7 +1,7 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
 import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
-import com.github.lukaszbudnik.roxdb.proto.*;
+import com.github.lukaszbudnik.roxdb.v1.*;
 import io.grpc.stub.StreamObserver;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterAll;

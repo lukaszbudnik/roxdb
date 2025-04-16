@@ -25,6 +25,7 @@ dependencies {
     implementation("com.google.protobuf:protobuf-java:4.30.2")
     implementation("com.google.protobuf:protobuf-java-util:4.30.2")
     implementation("io.grpc:grpc-protobuf:1.71.0")
+    implementation("io.grpc:grpc-services:1.71.0")
     implementation("io.grpc:grpc-stub:1.71.0")
     implementation("io.grpc:grpc-netty-shaded:1.71.0")
     implementation("javax.annotation:javax.annotation-api:1.3.2")
@@ -85,7 +86,7 @@ tasks.jacocoTestReport {
         files(classDirectories.files.map {
             fileTree(it) {
                 exclude(
-                    "com/github/lukaszbudnik/roxdb/proto/**"
+                    "com/github/lukaszbudnik/roxdb/v1/**"
                 )
             }
         })

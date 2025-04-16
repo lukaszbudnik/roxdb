@@ -1,7 +1,7 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
 import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
-import com.github.lukaszbudnik.roxdb.proto.*;
+import com.github.lukaszbudnik.roxdb.v1.*;
 import com.google.protobuf.Struct;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;

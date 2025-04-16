@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: roxdb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roxdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: roxdb
+  template:
+    metadata:
+      labels:
+        app: roxdb
+    spec:
+      containers:
+      - name: roxdb
+        image: roxdb:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 50051
+        env:
+        - name: ROXDB_DB_PATH
+          value: "/data/roxdb"
+        volumeMounts:
+        - name: roxdb-storage
+          mountPath: /data/roxdb
+        livenessProbe:
+          grpc:
+            port: 50051
+            service: com.github.lukaszbudnik.roxdb.v1.RoxDB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          grpc:
+            port: 50051
+            service: com.github.lukaszbudnik.roxdb.v1.RoxDB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+      volumes:
+      - name: roxdb-storage
+        persistentVolumeClaim:
+          claimName: roxdb-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: roxdb
+spec:
+  type: NodePort
+  ports:
+  - port: 50051
+    targetPort: 50051
+    protocol: TCP
+  selector:
+    app: roxdb

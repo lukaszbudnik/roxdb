@@ -1,4 +1,4 @@
-package com.github.lukaszbudnik.roxdb.api;
+package com.github.lukaszbudnik.roxdb.db;
 
 import java.util.Map;
 

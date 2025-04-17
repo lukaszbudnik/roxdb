@@ -3,7 +3,6 @@ package com.github.lukaszbudnik.roxdb.application;
 import static com.github.lukaszbudnik.roxdb.application.Application.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.github.lukaszbudnik.roxdb.api.RoxDBConfig;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;

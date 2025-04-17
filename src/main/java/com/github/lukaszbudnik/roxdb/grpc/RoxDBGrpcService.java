@@ -1,8 +1,8 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.api.Item;
-import com.github.lukaszbudnik.roxdb.api.Key;
-import com.github.lukaszbudnik.roxdb.api.RoxDB;
+import com.github.lukaszbudnik.roxdb.db.Item;
+import com.github.lukaszbudnik.roxdb.db.Key;
+import com.github.lukaszbudnik.roxdb.db.RoxDB;
 import com.github.lukaszbudnik.roxdb.v1.ItemRequest;
 import com.github.lukaszbudnik.roxdb.v1.ItemResponse;
 import com.github.lukaszbudnik.roxdb.v1.RoxDBGrpc;

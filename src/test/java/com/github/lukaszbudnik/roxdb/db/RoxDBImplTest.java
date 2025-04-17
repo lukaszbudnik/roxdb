@@ -1,7 +1,5 @@
 package com.github.lukaszbudnik.roxdb.db;
 
-import com.github.lukaszbudnik.roxdb.api.Item;
-import com.github.lukaszbudnik.roxdb.api.Key;
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;

@@ -32,6 +32,9 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
                     if (itemRequest.hasPutItem()) {
                         putItem(responseObserver, itemRequest);
                     }
+                    if (itemRequest.hasUpdateItem()) {
+                        updateItem(responseObserver, itemRequest);
+                    }
                     if (itemRequest.hasGetItem()) {
                         getItem(responseObserver, itemRequest);
                     }
@@ -43,7 +46,7 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
                     }
 
                 } catch (RocksDBException e) {
-                    responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setError(ItemResponse.Error.newBuilder().setMessage(e.getMessage()).setCode(ROCKS_DB_ERROR).build()).build());
+                    responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setError(ItemResponse.Error.newBuilder().setMessage(Error.ROCKS_DB_ERROR.getMessage()).setCode(Error.ROCKS_DB_ERROR.getCode()).build()).build());
                 } catch (Exception e) {
                     responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asException());
                 }
@@ -71,6 +74,17 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
         var item = new Item(key, attributes);
         roxDB.putItem(tableName, item);
         responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setPutItemResponse(ItemResponse.PutItemResponse.newBuilder().setKey(protoItem.getKey()).build()).build());
+    }
+
+    private void updateItem(StreamObserver<ItemResponse> responseObserver, ItemRequest itemRequest) throws RocksDBException {
+        var updateItem = itemRequest.getUpdateItem();
+        var protoItem = updateItem.getItem();
+        var tableName = itemRequest.getTable();
+        Map<String, Object> attributes = ProtoUtils.structToMap(protoItem.getAttributes());
+        var key = new Key(protoItem.getKey().getPartitionKey(), protoItem.getKey().getSortKey());
+        var item = new Item(key, attributes);
+        roxDB.updateItem(tableName, item);
+        responseObserver.onNext(ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId()).setUpdateItemResponse(ItemResponse.UpdateItemResponse.newBuilder().setKey(protoItem.getKey()).build()).build());
     }
 
     private void getItem(StreamObserver<ItemResponse> responseObserver, ItemRequest itemRequest) throws RocksDBException {

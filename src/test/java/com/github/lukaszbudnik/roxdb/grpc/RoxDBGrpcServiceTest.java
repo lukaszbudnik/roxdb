@@ -55,11 +55,12 @@ class RoxDBGrpcServiceTest {
     void crud() throws InterruptedException {
         // 2 GetItem operations
         CountDownLatch latch = new CountDownLatch(2);
-        Map<String, ItemResponse> putDeleteItemResponses = new HashMap<>();
+        Map<String, ItemResponse> putUpdateDeleteItemResponses = new HashMap<>();
         Map<String, ItemResponse> receivedItems = new HashMap<>();
         List<Throwable> errors = new ArrayList<>();
 
         UUID putItemId = UUID.randomUUID();
+        UUID updateItemId = UUID.randomUUID();
         UUID getItemId = UUID.randomUUID();
         UUID deleteItemId = UUID.randomUUID();
         UUID getItemNotFoundId = UUID.randomUUID();
@@ -78,7 +79,7 @@ class RoxDBGrpcServiceTest {
         StreamObserver<ItemResponse> responseObserver = new StreamObserver<ItemResponse>() {
             @Override
             public void onNext(ItemResponse response) {
-                putDeleteItemResponses.put(response.getCorrelationId(), response);
+                putUpdateDeleteItemResponses.put(response.getCorrelationId(), response);
             }
 
             @Override
@@ -119,6 +120,12 @@ class RoxDBGrpcServiceTest {
             ItemRequest putRequest = ItemRequest.newBuilder().setCorrelationId(putItemId.toString()).setTable(tableName).setPutItem(ItemRequest.PutItem.newBuilder().setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
             requestObserver.onNext(putRequest);
 
+            // Send UpdateItem request
+            attributes.put("field4", "value4");
+            attributes.put("field2", 200);
+            ItemRequest updateRequest = ItemRequest.newBuilder().setCorrelationId(updateItemId.toString()).setTable(tableName).setUpdateItem(ItemRequest.UpdateItem.newBuilder().setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
+            requestObserver.onNext(updateRequest);
+
             // Send GetItem request
             Key key = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
             ItemRequest getRequest = ItemRequest.newBuilder().setCorrelationId(getItemId.toString()).setTable(tableName).setGetItem(ItemRequest.GetItem.newBuilder().setKey(key).build()).build();
@@ -143,10 +150,16 @@ class RoxDBGrpcServiceTest {
             assertTrue(errors.isEmpty(), "Unexpected errors: " + errors);
 
             // Verify PutItem
-            ItemResponse putItemResponse = putDeleteItemResponses.get(putItemId.toString());
+            ItemResponse putItemResponse = putUpdateDeleteItemResponses.get(putItemId.toString());
             assertTrue(putItemResponse.hasPutItemResponse(), "Expected to get put item response for " + putItemId);
             assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
             assertEquals(key, putItemResponse.getPutItemResponse().getKey());
+
+            // Verify UpdateItem
+            ItemResponse updateItemResponse = putUpdateDeleteItemResponses.get(updateItemId.toString());
+            assertTrue(updateItemResponse.hasUpdateItemResponse(), "Expected to get update item response for " + updateItemId);
+            assertEquals(updateItemId.toString(), updateItemResponse.getCorrelationId());
+            assertEquals(key, updateItemResponse.getUpdateItemResponse().getKey());
 
             // Verify GetItem
             ItemResponse receivedItem = receivedItems.get(getItemId.toString());
@@ -155,12 +168,14 @@ class RoxDBGrpcServiceTest {
             assertEquals(key, receivedItem.getGetItemResponse().getItem().getKey());
             // Verify attributes
             Struct receivedAttributes = receivedItem.getGetItemResponse().getItem().getAttributes();
-            assertEquals("value1", receivedAttributes.getFieldsOrThrow("field1").getStringValue());
-            assertEquals(123.0, receivedAttributes.getFieldsOrThrow("field2").getNumberValue());
+            assertEquals(attributes.get("field1"), receivedAttributes.getFieldsOrThrow("field1").getStringValue());
+            // getNumberValue() returns double so need to cast it back to int
+            assertEquals(attributes.get("field2"), (int)receivedAttributes.getFieldsOrThrow("field2").getNumberValue());
             assertTrue(receivedAttributes.getFieldsOrThrow("field3").getBoolValue());
+            assertEquals(attributes.get("field4"), receivedAttributes.getFieldsOrThrow("field4").getStringValue());
 
             // Verity DeleteItem
-            ItemResponse deleteItemResponse = putDeleteItemResponses.get(deleteItemId.toString());
+            ItemResponse deleteItemResponse = putUpdateDeleteItemResponses.get(deleteItemId.toString());
             assertTrue(deleteItemResponse.hasDeleteItemResponse(), "Expected to get delete item response for " + deleteItemId);
             assertEquals(deleteItemId.toString(), deleteItemResponse.getCorrelationId());
             assertEquals(key, deleteItemResponse.getDeleteItemResponse().getKey());

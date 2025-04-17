@@ -24,12 +24,17 @@ message ItemRequest {
   string table = 2;
   oneof operation {
     PutItem put_item = 3;
-    GetItem get_item = 4;
-    DeleteItem delete_item = 5;
-    Query query = 6;
+    UpdateItem update_item = 4;
+    GetItem get_item = 5;
+    DeleteItem delete_item = 6;
+    Query query = 7;
   }
 
   message PutItem {
+    Item item = 1;
+  }
+
+  message UpdateItem {
     Item item = 1;
   }
 
@@ -53,12 +58,14 @@ message ItemResponse {
   oneof result {
     // Response to PutItem
     PutItemResponse put_item_response = 2;
+    // Response to UpdateItem
+    UpdateItemResponse update_item_response = 3;
     // Response to GetItem
-    GetItemResponse get_item_response = 3;
+    GetItemResponse get_item_response = 4;
     // Response to DeleteItem
-    DeleteItemResponse delete_item_response = 4;
+    DeleteItemResponse delete_item_response = 5;
     // Response to Query
-    QueryResponse query_response = 5;
+    QueryResponse query_response = 6;
     // Error
     Error error = 7;
   }
@@ -91,6 +98,12 @@ message ItemResponse {
   }
 
   message PutItemResponse {
+    oneof result {
+      Key key = 1;
+    }
+  }
+
+  message UpdateItemResponse {
     oneof result {
       Key key = 1;
     }

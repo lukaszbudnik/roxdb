@@ -1,6 +1,6 @@
 # RoxDB
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Java CI](https://github.com/lukaszbudnik/roxdb/actions/workflows/gradle.yml/badge.svg)](https://github.com/lukaszbudnik/roxdb/actions/workflows/gradle.yml) [![GitHub Issues](https://img.shields.io/github/issues/lukaszbudnik/roxdb)](https://github.com/lukaszbudnik/roxdb/issues)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Java CI](https://github.com/lukaszbudnik/roxdb/actions/workflows/gradle.yml/badge.svg)](https://github.com/lukaszbudnik/roxdb/actions/workflows/gradle.yml) [![Docker Image CI](https://github.com/lukaszbudnik/roxdb/actions/workflows/docker-image.yml/badge.svg)](https://github.com/lukaszbudnik/roxdb/actions/workflows/docker-image.yml) [![GitHub Issues](https://img.shields.io/github/issues/lukaszbudnik/roxdb)](https://github.com/lukaszbudnik/roxdb/issues)
 
 **DynamoDB-like implementation on RocksDB over gRPC.**
 
@@ -21,12 +21,11 @@ This project was born out of the desire to explore alternative storage solutions
 
 ## Features
 
-* **DynamoDB-like API:** `PutItem`, `DeleteItem`, `GetItem`, `Query`.
+* **DynamoDB-like API:** `PutItem`, `UpdateItem`, `DeleteItem`, `GetItem`, `Query`.
 * **RocksDB Storage:** Utilizing RocksDB for fast and reliable data storage.
 * **gRPC Interface:** Providing a high-performance gRPC API for client interactions.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
-* **Containerization & Orchestration:** Docker container support for easy deployment, quick-start Kubernetes manifests provided
-
+* **Containerization & Orchestration:** multi-arch (`linux/amd64` and `linux/arm64`) Docker container support for easy deployment, quick-start Kubernetes manifests provided
 
 ## Getting Started
 
@@ -91,7 +90,7 @@ This project was born out of the desire to explore alternative storage solutions
     grpcurl -plaintext ${ROXDB_ENDPOINT} describe com.github.lukaszbudnik.roxdb.v1.RoxDB
     # Check service health
     grpcurl -plaintext -d '{"service": "com.github.lukaszbudnik.roxdb.v1.RoxDB"}' ${ROXDB_ENDPOINT} grpc.health.v1.Health/Check
-    # Stream PutItem, GetItem, DeleteItem, and one more GetItem in a single call
+    # Stream PutItem, UpdateItem, GetItem, DeleteItem, and one more GetItem in a single call
     grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
     {
       "correlation_id": "123",
@@ -103,16 +102,30 @@ This project was born out of the desire to explore alternative storage solutions
             "sort_key": "sort1"
           },
           "attributes": {
-            "fields": {
-              "field1": "value1",
-              "field2": 123
-            }
+            "field1": "value1",
+            "field2": 123
           }
         }
       }
     }
     {
       "correlation_id": "124",
+      "table": "your-table-name",
+      "update_item": {
+        "item": {
+          "key": {
+            "partition_key": "part1",
+            "sort_key": "sort1"
+          },
+          "attributes": {
+            "field1": "new value for field1",
+            "field3": "brand new field"
+          }
+        }
+      }
+    }
+    {
+      "correlation_id": "125",
       "table": "your-table-name",
       "get_item": {
         "key": {
@@ -122,7 +135,7 @@ This project was born out of the desire to explore alternative storage solutions
       }
     }
     {
-      "correlation_id": "125",
+      "correlation_id": "126",
       "table": "your-table-name",
       "delete_item": {
         "key": {
@@ -132,7 +145,7 @@ This project was born out of the desire to explore alternative storage solutions
       }
     }
     {
-      "correlation_id": "126",
+      "correlation_id": "127",
       "table": "your-table-name",
       "get_item": {
         "key": {

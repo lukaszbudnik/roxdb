@@ -51,6 +51,7 @@ class RoxDBImplTest {
         Key key = new Key("user123", "profile");
         Map<String, Object> attributes = new HashMap<>();
         attributes.put("message", "Hello World");
+        attributes.put("number", 123);
         Item item = new Item(key, attributes);
         roxdb.putItem("users", item);
 
@@ -60,15 +61,21 @@ class RoxDBImplTest {
         Assertions.assertEquals(item, retrievedItem);
 
         // Update item
-        Map<String, Object> updatedAttributes = new HashMap<>(retrievedItem.attributes());
+        Map<String, Object> updatedAttributes = new HashMap<>();
         updatedAttributes.put("new_attribute", "new value");
+        updatedAttributes.put("message", "Hello World!");
         Item updatedItem = new Item(key, updatedAttributes);
-        roxdb.putItem("users", updatedItem);
+        roxdb.updateItem("users", updatedItem);
 
         // Get updated item
         Item retrievedUpdatedItem = roxdb.getItem("users", key);
         log.trace("Retrieved item: {}", retrievedUpdatedItem);
-        Assertions.assertEquals(updatedItem, retrievedUpdatedItem);
+        Assertions.assertEquals(updatedItem.key(), retrievedUpdatedItem.key());
+        // the item is updated and should have attributes from the original retrievedItem and updatedItem merged
+        // the size of the attributes map should be 3 and the attributes map should have both entries
+        Assertions.assertEquals(3, retrievedUpdatedItem.attributes().size());
+        Assertions.assertTrue(retrievedUpdatedItem.attributes().keySet().containsAll(retrievedItem.attributes().keySet()));
+        Assertions.assertTrue(retrievedUpdatedItem.attributes().keySet().containsAll(updatedItem.attributes().keySet()));
 
         // Delete item
         roxdb.deleteItem("users", key);

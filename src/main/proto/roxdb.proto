@@ -21,30 +21,39 @@ message Item {
 
 message ItemRequest {
   string correlation_id = 1;
-  string table = 2;
   oneof operation {
     PutItem put_item = 3;
-    GetItem get_item = 4;
-    DeleteItem delete_item = 5;
-    Query query = 6;
+    UpdateItem update_item = 4;
+    GetItem get_item = 5;
+    DeleteItem delete_item = 6;
+    Query query = 7;
   }
 
   message PutItem {
-    Item item = 1;
+    string table = 1;
+    Item item = 2;
+  }
+
+  message UpdateItem {
+    string table = 1;
+    Item item = 2;
   }
 
   message GetItem {
-    Key key = 1;
+    string table = 1;
+    Key key = 2;
   }
 
   message DeleteItem {
-    Key key = 1;
+    string table = 1;
+    Key key = 2;
   }
 
   message Query {
-    string partition_key = 1;
-    optional string sort_key_start = 2;
-    optional string sort_key_end = 3;
+    string table = 1;
+    string partition_key = 2;
+    optional string sort_key_start = 3;
+    optional string sort_key_end = 4;
   }
 }
 
@@ -53,12 +62,14 @@ message ItemResponse {
   oneof result {
     // Response to PutItem
     PutItemResponse put_item_response = 2;
+    // Response to UpdateItem
+    UpdateItemResponse update_item_response = 3;
     // Response to GetItem
-    GetItemResponse get_item_response = 3;
+    GetItemResponse get_item_response = 4;
     // Response to DeleteItem
-    DeleteItemResponse delete_item_response = 4;
+    DeleteItemResponse delete_item_response = 5;
     // Response to Query
-    QueryResponse query_response = 5;
+    QueryResponse query_response = 6;
     // Error
     Error error = 7;
   }
@@ -91,6 +102,12 @@ message ItemResponse {
   }
 
   message PutItemResponse {
+    oneof result {
+      Key key = 1;
+    }
+  }
+
+  message UpdateItemResponse {
     oneof result {
       Key key = 1;
     }

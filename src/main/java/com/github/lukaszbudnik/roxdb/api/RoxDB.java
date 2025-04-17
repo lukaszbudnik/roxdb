@@ -9,6 +9,9 @@ public interface RoxDB extends AutoCloseable {
     // PutItem operation
     void putItem(String tableName, Item item) throws RocksDBException;
 
+    // UpdateItem operation
+    void updateItem(String tableName, Item item) throws RocksDBException;
+
     // GetItem operation
     Item getItem(String tableName, Key key) throws RocksDBException;
 

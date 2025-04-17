@@ -104,7 +104,28 @@ public class RoxDBImpl implements RoxDB {
         // Store in RocksDB
         db.put(cfHandle, key, value);
 
-        logger.debug("Item written: {}", item.key().toStorageKey());
+        logger.debug("Item put: {}", item.key().toStorageKey());
+    }
+
+    //  UpdateItem operation
+    @Override
+    public void updateItem(String tableName, Item item) throws RocksDBException {
+        Item existingItem = getItem(tableName, item.key());
+
+        if (existingItem == null) {
+            // If item doesn't exist, perform a put operation
+            putItem(tableName, item);
+            return;
+        }
+
+        // Merge existing and new attributes
+        Map<String, Object> mergedAttributes = new HashMap<>(existingItem.attributes());
+        mergedAttributes.putAll(item.attributes());
+
+        // Create new item with merged attributes
+        Item updatedItem = new Item(item.key(), mergedAttributes);
+
+        putItem(tableName, updatedItem);
     }
 
     // GetItem operation

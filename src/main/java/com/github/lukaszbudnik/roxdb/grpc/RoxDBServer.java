@@ -1,6 +1,6 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.db.RoxDB;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
 import com.github.lukaszbudnik.roxdb.v1.RoxDBGrpc;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;

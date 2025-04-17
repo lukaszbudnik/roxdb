@@ -2,7 +2,7 @@ package com.github.lukaszbudnik.roxdb.grpc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
 import com.github.lukaszbudnik.roxdb.v1.*;
 import com.google.protobuf.Struct;
 import io.grpc.ManagedChannel;

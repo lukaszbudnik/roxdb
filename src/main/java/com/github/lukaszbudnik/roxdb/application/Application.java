@@ -1,7 +1,7 @@
 package com.github.lukaszbudnik.roxdb.application;
 
-import com.github.lukaszbudnik.roxdb.db.RoxDB;
-import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBServer;
 import java.io.File;
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.github.lukaszbudnik.roxdb.db;
+package com.github.lukaszbudnik.roxdb.rocksdb;
 
 import java.util.List;
 import java.util.Optional;

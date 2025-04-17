@@ -1,4 +1,4 @@
-package com.github.lukaszbudnik.roxdb.db;
+package com.github.lukaszbudnik.roxdb.rocksdb;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

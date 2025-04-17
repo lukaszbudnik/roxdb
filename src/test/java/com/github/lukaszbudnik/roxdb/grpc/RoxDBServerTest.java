@@ -2,7 +2,7 @@ package com.github.lukaszbudnik.roxdb.grpc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.github.lukaszbudnik.roxdb.db.RoxDBImpl;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
 import com.github.lukaszbudnik.roxdb.v1.*;
 import io.grpc.stub.StreamObserver;
 import java.io.File;

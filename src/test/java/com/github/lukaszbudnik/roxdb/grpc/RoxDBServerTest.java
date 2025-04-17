@@ -61,8 +61,7 @@ class RoxDBServerTest {
 
         ItemRequest putRequest = ItemRequest.newBuilder()
                                             .setCorrelationId(putItemId.toString())
-                                            .setTable(tableName)
-                                            .setPutItem(ItemRequest.PutItem.newBuilder().setItem(Item.newBuilder().setKey(key).build()).build())
+                                            .setPutItem(ItemRequest.PutItem.newBuilder().setTable(tableName).setItem(Item.newBuilder().setKey(key).build()).build())
                                             .build()
                 ;
 

@@ -117,26 +117,26 @@ class RoxDBGrpcServiceTest {
 
         try {
             // Send PutItem request
-            ItemRequest putRequest = ItemRequest.newBuilder().setCorrelationId(putItemId.toString()).setTable(tableName).setPutItem(ItemRequest.PutItem.newBuilder().setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
+            ItemRequest putRequest = ItemRequest.newBuilder().setCorrelationId(putItemId.toString()).setPutItem(ItemRequest.PutItem.newBuilder().setTable(tableName).setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
             requestObserver.onNext(putRequest);
 
             // Send UpdateItem request
             attributes.put("field4", "value4");
             attributes.put("field2", 200);
-            ItemRequest updateRequest = ItemRequest.newBuilder().setCorrelationId(updateItemId.toString()).setTable(tableName).setUpdateItem(ItemRequest.UpdateItem.newBuilder().setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
+            ItemRequest updateRequest = ItemRequest.newBuilder().setCorrelationId(updateItemId.toString()).setUpdateItem(ItemRequest.UpdateItem.newBuilder().setTable(tableName).setItem(createTestItem(partitionKey, sortKey, attributes)).build()).build();
             requestObserver.onNext(updateRequest);
 
             // Send GetItem request
             Key key = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
-            ItemRequest getRequest = ItemRequest.newBuilder().setCorrelationId(getItemId.toString()).setTable(tableName).setGetItem(ItemRequest.GetItem.newBuilder().setKey(key).build()).build();
+            ItemRequest getRequest = ItemRequest.newBuilder().setCorrelationId(getItemId.toString()).setGetItem(ItemRequest.GetItem.newBuilder().setTable(tableName).setKey(key).build()).build();
             requestObserverGetItem.onNext(getRequest);
 
             // Send DeleteItem request
-            ItemRequest deleteRequest = ItemRequest.newBuilder().setCorrelationId(deleteItemId.toString()).setTable(tableName).setDeleteItem(ItemRequest.DeleteItem.newBuilder().setKey(key).build()).build();
+            ItemRequest deleteRequest = ItemRequest.newBuilder().setCorrelationId(deleteItemId.toString()).setDeleteItem(ItemRequest.DeleteItem.newBuilder().setTable(tableName).setKey(key).build()).build();
             requestObserver.onNext(deleteRequest);
 
             // Seng GetItem request for non-existing deleted item
-            ItemRequest getRequestNotFound = ItemRequest.newBuilder().setCorrelationId(getItemNotFoundId.toString()).setTable(tableName).setGetItem(ItemRequest.GetItem.newBuilder().setKey(key).build()).build();
+            ItemRequest getRequestNotFound = ItemRequest.newBuilder().setCorrelationId(getItemNotFoundId.toString()).setGetItem(ItemRequest.GetItem.newBuilder().setTable(tableName).setKey(key).build()).build();
             requestObserverGetItem.onNext(getRequestNotFound);
 
             // Complete the request stream

@@ -21,7 +21,6 @@ message Item {
 
 message ItemRequest {
   string correlation_id = 1;
-  string table = 2;
   oneof operation {
     PutItem put_item = 3;
     UpdateItem update_item = 4;
@@ -31,25 +30,30 @@ message ItemRequest {
   }
 
   message PutItem {
-    Item item = 1;
+    string table = 1;
+    Item item = 2;
   }
 
   message UpdateItem {
-    Item item = 1;
+    string table = 1;
+    Item item = 2;
   }
 
   message GetItem {
-    Key key = 1;
+    string table = 1;
+    Key key = 2;
   }
 
   message DeleteItem {
-    Key key = 1;
+    string table = 1;
+    Key key = 2;
   }
 
   message Query {
-    string partition_key = 1;
-    optional string sort_key_start = 2;
-    optional string sort_key_end = 3;
+    string table = 1;
+    string partition_key = 2;
+    optional string sort_key_start = 3;
+    optional string sort_key_end = 4;
   }
 }
 

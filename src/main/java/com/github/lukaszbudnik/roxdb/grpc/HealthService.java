@@ -18,11 +18,11 @@ public class HealthService extends HealthGrpc.HealthImplBase {
   @Override
   public void check(
       HealthCheckRequest request, StreamObserver<HealthCheckResponse> responseObserver) {
-    String service = request.getService();
-    HealthCheckResponse.ServingStatus servingStatus =
-        servingStatusMap.getOrDefault(service, HealthCheckResponse.ServingStatus.SERVICE_UNKNOWN);
+    HealthCheckResponse.ServingStatus servingStatus = getServiceStatus(request.getService());
     logger.debug(
-        "Returning health check for {} with service status: {}", service, servingStatus.name());
+        "Returning health check for {} with service status: {}",
+        request.getService(),
+        servingStatus.name());
     responseObserver.onNext(HealthCheckResponse.newBuilder().setStatus(servingStatus).build());
     responseObserver.onCompleted();
   }
@@ -30,5 +30,13 @@ public class HealthService extends HealthGrpc.HealthImplBase {
   public void setServiceStatus(String service, HealthCheckResponse.ServingStatus servingStatus) {
     logger.info("Setting {} service status to: {}", service, servingStatus.name());
     servingStatusMap.put(service, servingStatus);
+  }
+
+  public HealthCheckResponse.ServingStatus getServiceStatus(String service) {
+    HealthCheckResponse.ServingStatus servingStatus =
+        servingStatusMap.getOrDefault(service, HealthCheckResponse.ServingStatus.SERVICE_UNKNOWN);
+    logger.info(
+        "Returning health check for {} with service status: {}", service, servingStatus.name());
+    return servingStatus;
   }
 }

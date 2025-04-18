@@ -43,32 +43,33 @@ public class RoxDBServer {
   }
 
   public void stop() throws InterruptedException {
-    if (server != null) {
-      logger.info("Initiating graceful shutdown");
-      server.shutdown();
-      setServiceStatus(ServingStatus.NOT_SERVING);
-      try {
-        if (!server.awaitTermination(30, TimeUnit.SECONDS)) {
-          logger.warn("Server did not terminate in 30 seconds. Forcing shutdown.");
-          server.shutdownNow();
-        }
-      } catch (InterruptedException e) {
-        logger.error("Server shutdown interrupted", e);
+    logger.info("Initiating graceful shutdown");
+    server.shutdown();
+    setServiceStatus(ServingStatus.NOT_SERVING);
+    try {
+      if (!server.awaitTermination(30, TimeUnit.SECONDS)) {
+        logger.warn("Server did not terminate in 30 seconds. Forcing shutdown.");
         server.shutdownNow();
-        throw e;
       }
-      logger.info("Server shutdown completed");
+    } catch (InterruptedException e) {
+      logger.error("Server shutdown interrupted", e);
+      server.shutdownNow();
+      throw e;
     }
+    logger.info("Server shutdown completed");
   }
 
   public void blockUntilShutdown() throws InterruptedException {
-    if (server != null) {
-      server.awaitTermination();
-    }
+    server.awaitTermination();
   }
 
   public void setServiceStatus(ServingStatus servingStatus) {
     String service = RoxDBGrpc.getServiceDescriptor().getName();
     healthService.setServiceStatus(service, servingStatus);
+  }
+
+  public ServingStatus getServiceStatus() {
+    String service = RoxDBGrpc.getServiceDescriptor().getName();
+    return healthService.getServiceStatus(service);
   }
 }

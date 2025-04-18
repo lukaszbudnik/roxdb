@@ -4,30 +4,39 @@ import io.grpc.health.v1.HealthCheckRequest;
 import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.health.v1.HealthGrpc;
 import io.grpc.stub.StreamObserver;
+import java.util.HashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class HealthService extends HealthGrpc.HealthImplBase {
 
-    private final Logger logger = LoggerFactory.getLogger(HealthService.class);
+  private final Logger logger = LoggerFactory.getLogger(HealthService.class);
 
-    private final Map<String, HealthCheckResponse.ServingStatus> servingStatusMap = new HashMap<>();
+  private final Map<String, HealthCheckResponse.ServingStatus> servingStatusMap = new HashMap<>();
 
-    @Override
-    public void check(HealthCheckRequest request, StreamObserver<HealthCheckResponse> responseObserver) {
-        String service = request.getService();
-        HealthCheckResponse.ServingStatus servingStatus = servingStatusMap.getOrDefault(service, HealthCheckResponse.ServingStatus.SERVICE_UNKNOWN);
-        logger.debug("Returning health check for {} with service status: {}", service, servingStatus.name());
-        responseObserver.onNext(HealthCheckResponse.newBuilder().setStatus(servingStatus).build());
-        responseObserver.onCompleted();
-    }
+  @Override
+  public void check(
+      HealthCheckRequest request, StreamObserver<HealthCheckResponse> responseObserver) {
+    HealthCheckResponse.ServingStatus servingStatus = getServiceStatus(request.getService());
+    logger.debug(
+        "Returning health check for {} with service status: {}",
+        request.getService(),
+        servingStatus.name());
+    responseObserver.onNext(HealthCheckResponse.newBuilder().setStatus(servingStatus).build());
+    responseObserver.onCompleted();
+  }
 
-    public void setServiceStatus(String service, HealthCheckResponse.ServingStatus servingStatus) {
-        logger.info("Setting {} service status to: {}", service, servingStatus.name());
-        servingStatusMap.put(service, servingStatus);
-    }
+  public void setServiceStatus(String service, HealthCheckResponse.ServingStatus servingStatus) {
+    logger.info("Setting {} service status to: {}", service, servingStatus.name());
+    servingStatusMap.put(service, servingStatus);
+  }
 
+  public HealthCheckResponse.ServingStatus getServiceStatus(String service) {
+    HealthCheckResponse.ServingStatus servingStatus =
+        servingStatusMap.getOrDefault(service, HealthCheckResponse.ServingStatus.SERVICE_UNKNOWN);
+    logger.info(
+        "Returning health check for {} with service status: {}", service, servingStatus.name());
+    return servingStatus;
+  }
 }

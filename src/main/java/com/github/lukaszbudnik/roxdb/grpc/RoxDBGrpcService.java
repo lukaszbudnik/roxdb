@@ -108,15 +108,15 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
                           .setCode(Error.ROCKS_DB_ERROR.getCode())
                           .build())
                   .build());
-        } catch (Exception e) {
-          logger.error("Error processing item request", e);
-          responseObserver.onError(Status.INTERNAL.withDescription("Internal error").asException());
+        } catch (Throwable t) {
+          onError(t);
         }
       }
 
       @Override
-      public void onError(Throwable throwable) {
-        responseObserver.onError(throwable);
+      public void onError(Throwable t) {
+        logger.error("Error processing item request", t);
+        responseObserver.onError(Status.INTERNAL.withDescription("Internal error").asException());
       }
 
       @Override

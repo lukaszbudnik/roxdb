@@ -1,39 +1,44 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
-import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
+import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
 import com.github.lukaszbudnik.roxdb.v1.*;
-import com.google.protobuf.Struct;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.rocksdb.RocksDBException;
 
+@ExtendWith(MockitoExtension.class)
 class RoxDBGrpcServiceTest {
   private Server server;
   private ManagedChannel channel;
   private RoxDBGrpc.RoxDBStub asyncStub;
-  private RoxDBImpl roxDB;
-  private String dbPath;
+  @Mock private RoxDB roxDB;
+  @Captor private ArgumentCaptor<com.github.lukaszbudnik.roxdb.rocksdb.Item> itemCaptor;
+  @Captor private ArgumentCaptor<com.github.lukaszbudnik.roxdb.rocksdb.Key> keyCaptor;
 
   @BeforeEach
   void setUp() throws IOException, RocksDBException {
     String serverName = InProcessServerBuilder.generateName();
-    dbPath = "/tmp/roxdb-test-" + System.currentTimeMillis();
-    roxDB = new RoxDBImpl(dbPath);
 
     server =
         InProcessServerBuilder.forName(serverName)
@@ -51,203 +56,406 @@ class RoxDBGrpcServiceTest {
   void tearDown() throws InterruptedException {
     channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
     server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-    roxDB.close();
-    FileUtils.deleteQuietly(new File(dbPath));
   }
 
   @Test
-  void crud() throws InterruptedException {
-    // 2 GetItem operations
-    CountDownLatch latch = new CountDownLatch(2);
-    Map<String, ItemResponse> putUpdateDeleteItemResponses = new HashMap<>();
-    Map<String, ItemResponse> receivedItems = new HashMap<>();
-    List<Throwable> errors = new ArrayList<>();
-
+  void putItem() throws RocksDBException, InterruptedException {
     UUID putItemId = UUID.randomUUID();
-    UUID updateItemId = UUID.randomUUID();
-    UUID getItemId = UUID.randomUUID();
-    UUID deleteItemId = UUID.randomUUID();
-    UUID getItemNotFoundId = UUID.randomUUID();
-
-    // Create test data
-    String tableName = "test-table";
+    String table = "table";
     String partitionKey = "pk1";
     String sortKey = "sk1";
-
     Map<String, Object> attributes = new HashMap<>();
     attributes.put("field1", "value1");
-    attributes.put("field2", 123);
+    attributes.put("field2", 123.0);
     attributes.put("field3", true);
 
-    // Setup streaming observer for receiving responses
-    StreamObserver<ItemResponse> responseObserver =
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // putItem is a void method
+    doNothing()
+        .when(roxDB)
+        .putItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Item.class));
+
+    ItemRequest putItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(putItemId.toString())
+            .setPutItem(
+                ItemRequest.PutItem.newBuilder()
+                    .setTable(table)
+                    .setItem(
+                        Item.newBuilder()
+                            .setKey(
+                                Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build())
+                            .setAttributes(ProtoUtils.mapToStruct(attributes))
+                            .build())
+                    .build())
+            .build();
+
+    var responseObserver =
         new StreamObserver<ItemResponse>() {
           @Override
-          public void onNext(ItemResponse response) {
-            putUpdateDeleteItemResponses.put(response.getCorrelationId(), response);
-          }
-
-          @Override
-          public void onError(Throwable t) {
-            errors.add(t);
-          }
-
-          @Override
-          public void onCompleted() {}
-        };
-
-    // Start bidirectional streaming
-    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
-
-    StreamObserver<ItemResponse> responseObserverGetItem =
-        new StreamObserver<ItemResponse>() {
-          @Override
-          public void onNext(ItemResponse response) {
-            receivedItems.put(response.getCorrelationId(), response);
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
             latch.countDown();
           }
 
           @Override
-          public void onError(Throwable t) {
-            errors.add(t);
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
           }
 
           @Override
-          public void onCompleted() {}
+          public void onCompleted() {
+            // no-op
+          }
         };
 
-    // Start bidirectional streaming
-    StreamObserver<ItemRequest> requestObserverGetItem =
-        asyncStub.processItems(responseObserverGetItem);
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(putItemRequest);
+    requestObserver.onCompleted();
 
-    try {
-      // Send PutItem request
-      ItemRequest putRequest =
-          ItemRequest.newBuilder()
-              .setCorrelationId(putItemId.toString())
-              .setPutItem(
-                  ItemRequest.PutItem.newBuilder()
-                      .setTable(tableName)
-                      .setItem(createTestItem(partitionKey, sortKey, attributes))
-                      .build())
-              .build();
-      requestObserver.onNext(putRequest);
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
 
-      // Send UpdateItem request
-      attributes.put("field4", "value4");
-      attributes.put("field2", 200);
-      ItemRequest updateRequest =
-          ItemRequest.newBuilder()
-              .setCorrelationId(updateItemId.toString())
-              .setUpdateItem(
-                  ItemRequest.UpdateItem.newBuilder()
-                      .setTable(tableName)
-                      .setItem(createTestItem(partitionKey, sortKey, attributes))
-                      .build())
-              .build();
-      requestObserver.onNext(updateRequest);
+    // verify Mocks were called
+    verify(roxDB).putItem(eq(table), itemCaptor.capture());
+    var capturedItem = itemCaptor.getValue();
+    assertEquals(partitionKey, capturedItem.key().partitionKey());
+    assertEquals(sortKey, capturedItem.key().sortKey());
+    assertEquals(attributes, capturedItem.attributes());
 
-      // Send GetItem request
-      Key key = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
-      ItemRequest getRequest =
-          ItemRequest.newBuilder()
-              .setCorrelationId(getItemId.toString())
-              .setGetItem(ItemRequest.GetItem.newBuilder().setTable(tableName).setKey(key).build())
-              .build();
-      requestObserverGetItem.onNext(getRequest);
-
-      // Send DeleteItem request
-      ItemRequest deleteRequest =
-          ItemRequest.newBuilder()
-              .setCorrelationId(deleteItemId.toString())
-              .setDeleteItem(
-                  ItemRequest.DeleteItem.newBuilder().setTable(tableName).setKey(key).build())
-              .build();
-      requestObserver.onNext(deleteRequest);
-
-      // Seng GetItem request for non-existing deleted item
-      ItemRequest getRequestNotFound =
-          ItemRequest.newBuilder()
-              .setCorrelationId(getItemNotFoundId.toString())
-              .setGetItem(ItemRequest.GetItem.newBuilder().setTable(tableName).setKey(key).build())
-              .build();
-      requestObserverGetItem.onNext(getRequestNotFound);
-
-      // Complete the request stream
-      requestObserver.onCompleted();
-      requestObserverGetItem.onCompleted();
-
-      // Wait for response with timeout
-      assertTrue(latch.await(5, TimeUnit.SECONDS), "Timeout waiting for response");
-
-      // Verify results
-      assertTrue(errors.isEmpty(), "Unexpected errors: " + errors);
-
-      // Verify PutItem
-      ItemResponse putItemResponse = putUpdateDeleteItemResponses.get(putItemId.toString());
-      assertTrue(
-          putItemResponse.hasPutItemResponse(),
-          "Expected to get put item response for " + putItemId);
-      assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
-      assertEquals(key, putItemResponse.getPutItemResponse().getKey());
-
-      // Verify UpdateItem
-      ItemResponse updateItemResponse = putUpdateDeleteItemResponses.get(updateItemId.toString());
-      assertTrue(
-          updateItemResponse.hasUpdateItemResponse(),
-          "Expected to get update item response for " + updateItemId);
-      assertEquals(updateItemId.toString(), updateItemResponse.getCorrelationId());
-      assertEquals(key, updateItemResponse.getUpdateItemResponse().getKey());
-
-      // Verify GetItem
-      ItemResponse receivedItem = receivedItems.get(getItemId.toString());
-      assertTrue(
-          receivedItem.hasGetItemResponse(), "Expected to get received item for " + getItemId);
-      // Verify Key
-      assertEquals(key, receivedItem.getGetItemResponse().getItem().getKey());
-      // Verify attributes
-      Struct receivedAttributes = receivedItem.getGetItemResponse().getItem().getAttributes();
-      assertEquals(
-          attributes.get("field1"), receivedAttributes.getFieldsOrThrow("field1").getStringValue());
-      // getNumberValue() returns double so need to cast it back to int
-      assertEquals(
-          attributes.get("field2"),
-          (int) receivedAttributes.getFieldsOrThrow("field2").getNumberValue());
-      assertTrue(receivedAttributes.getFieldsOrThrow("field3").getBoolValue());
-      assertEquals(
-          attributes.get("field4"), receivedAttributes.getFieldsOrThrow("field4").getStringValue());
-
-      // Verity DeleteItem
-      ItemResponse deleteItemResponse = putUpdateDeleteItemResponses.get(deleteItemId.toString());
-      assertTrue(
-          deleteItemResponse.hasDeleteItemResponse(),
-          "Expected to get delete item response for " + deleteItemId);
-      assertEquals(deleteItemId.toString(), deleteItemResponse.getCorrelationId());
-      assertEquals(key, deleteItemResponse.getDeleteItemResponse().getKey());
-
-      // Verify GetItem - not found
-      ItemResponse notFoundItem = receivedItems.get(getItemNotFoundId.toString());
-      assertTrue(
-          notFoundItem.getGetItemResponse().hasItemNotFound(),
-          "Expected to get item not found for " + getItemNotFoundId);
-      assertEquals(getItemNotFoundId.toString(), notFoundItem.getCorrelationId());
-      assertEquals(key, notFoundItem.getGetItemResponse().getItemNotFound().getKey());
-    } catch (Exception e) {
-      requestObserver.onError(e);
-      throw e;
-    }
+    // verify expected gRPC response
+    ItemResponse putItemResponse = responses.get(putItemId.toString());
+    assertTrue(
+        putItemResponse.hasPutItemResponse(), "Expected to get put item response for " + putItemId);
+    assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
+    assertEquals(partitionKey, putItemResponse.getPutItemResponse().getKey().getPartitionKey());
+    assertEquals(sortKey, putItemResponse.getPutItemResponse().getKey().getSortKey());
   }
 
   @Test
-  public void testQuery() throws Exception {
+  void updateItem() throws RocksDBException, InterruptedException {
+    // Test UpdateItem
+    UUID updateItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "pk1";
+    String sortKey = "sk1";
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("field1", "value1");
+    attributes.put("field2", 123.0);
+    attributes.put("field3", true);
+    ItemRequest updateItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(updateItemId.toString())
+            .setUpdateItem(
+                ItemRequest.UpdateItem.newBuilder()
+                    .setTable(table)
+                    .setItem(
+                        Item.newBuilder()
+                            .setKey(
+                                Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build())
+                            .setAttributes(ProtoUtils.mapToStruct(attributes))
+                            .build())
+                    .build())
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // updateItem is a void method
+    doNothing()
+        .when(roxDB)
+        .updateItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Item.class));
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(updateItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB).updateItem(eq(table), itemCaptor.capture());
+    var capturedItem = itemCaptor.getValue();
+    assertEquals(partitionKey, capturedItem.key().partitionKey());
+    assertEquals(sortKey, capturedItem.key().sortKey());
+    assertEquals(attributes, capturedItem.attributes());
+
+    // verify expected gRPC response
+    ItemResponse updateItemResponse = responses.get(updateItemId.toString());
+    assertTrue(
+        updateItemResponse.hasUpdateItemResponse(),
+        "Expected to get update item response for " + updateItemId);
+    assertEquals(updateItemId.toString(), updateItemResponse.getCorrelationId());
+    assertEquals(
+        partitionKey, updateItemResponse.getUpdateItemResponse().getKey().getPartitionKey());
+    assertEquals(sortKey, updateItemResponse.getUpdateItemResponse().getKey().getSortKey());
+  }
+
+  @Test
+  void deleteItem() throws RocksDBException, InterruptedException {
+    // Test DeleteItem
+    UUID deleteItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "pk1";
+    String sortKey = "sk1";
+    ItemRequest deleteItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(deleteItemId.toString())
+            .setDeleteItem(
+                ItemRequest.DeleteItem.newBuilder()
+                    .setTable(table)
+                    .setKey(
+                        Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build())
+                    .build())
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // deleteItem is a void method
+    doNothing()
+        .when(roxDB)
+        .deleteItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Key.class));
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(deleteItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB).deleteItem(eq(table), keyCaptor.capture());
+    var capturedKey = keyCaptor.getValue();
+    assertEquals(partitionKey, capturedKey.partitionKey());
+    assertEquals(sortKey, capturedKey.sortKey());
+
+    // verify expected gRPC response
+    ItemResponse deleteItemResponse = responses.get(deleteItemId.toString());
+    assertTrue(
+        deleteItemResponse.hasDeleteItemResponse(),
+        "Expected to get delete item response for " + deleteItemId);
+    assertEquals(deleteItemId.toString(), deleteItemResponse.getCorrelationId());
+    assertEquals(
+        partitionKey, deleteItemResponse.getDeleteItemResponse().getKey().getPartitionKey());
+    assertEquals(sortKey, deleteItemResponse.getDeleteItemResponse().getKey().getSortKey());
+  }
+
+  @Test
+  void getItem() throws RocksDBException, InterruptedException {
+    // Test GetItem
+    UUID getItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "pk1";
+    String sortKey = "sk1";
+    ItemRequest getItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(getItemId.toString())
+            .setGetItem(
+                ItemRequest.GetItem.newBuilder()
+                    .setTable(table)
+                    .setKey(
+                        Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build())
+                    .build())
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // getItem is a void method
+    // create sample item
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("field1", "value1");
+    attributes.put("field2", 123.0);
+    attributes.put("field3", true);
+    var item =
+        new com.github.lukaszbudnik.roxdb.rocksdb.Item(
+            new com.github.lukaszbudnik.roxdb.rocksdb.Key(partitionKey, sortKey), attributes);
+    when(roxDB.getItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Key.class)))
+        .thenReturn(item);
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(getItemId.toString(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(getItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB).getItem(eq(table), keyCaptor.capture());
+    var capturedKey = keyCaptor.getValue();
+    assertEquals(partitionKey, capturedKey.partitionKey());
+    assertEquals(sortKey, capturedKey.sortKey());
+
+    // verify expected gRPC response
+    ItemResponse getItemResponse = responses.get(getItemId.toString());
+    assertTrue(
+        getItemResponse.hasGetItemResponse(), "Expected to get get item response for " + getItemId);
+    assertEquals(getItemId.toString(), getItemResponse.getCorrelationId());
+    assertEquals(
+        partitionKey, getItemResponse.getGetItemResponse().getItem().getKey().getPartitionKey());
+    assertEquals(sortKey, getItemResponse.getGetItemResponse().getItem().getKey().getSortKey());
+    assertEquals(
+        attributes,
+        ProtoUtils.structToMap(getItemResponse.getGetItemResponse().getItem().getAttributes()));
+  }
+
+  @Test
+  void getItemNotFound() throws RocksDBException, InterruptedException {
+    // Test GetItem
+    UUID getItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "pk1";
+    String sortKey = "sk1";
+    ItemRequest getItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(getItemId.toString())
+            .setGetItem(
+                ItemRequest.GetItem.newBuilder()
+                    .setTable(table)
+                    .setKey(
+                        Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build())
+                    .build())
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // getItem returns null
+    when(roxDB.getItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Key.class)))
+        .thenReturn(null);
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(getItemId.toString(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(getItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB).getItem(eq(table), keyCaptor.capture());
+    var capturedKey = keyCaptor.getValue();
+    assertEquals(partitionKey, capturedKey.partitionKey());
+    assertEquals(sortKey, capturedKey.sortKey());
+
+    // verify expected gRPC response
+    ItemResponse getItemResponse = responses.get(getItemId.toString());
+    assertTrue(
+        getItemResponse.hasGetItemResponse(), "Expected to get get item response for " + getItemId);
+    assertEquals(getItemId.toString(), getItemResponse.getCorrelationId());
+    assertEquals(
+        partitionKey,
+        getItemResponse.getGetItemResponse().getItemNotFound().getKey().getPartitionKey());
+    assertEquals(
+        sortKey, getItemResponse.getGetItemResponse().getItemNotFound().getKey().getSortKey());
+  }
+
+  @Test
+  void query() throws Exception {
     // Setup test data
+    String table = "table";
     String partitionKey = "test-partition";
     String sortKeyPrefix = "sort-key-";
-    int numberOfItems = 5;
     int numberOfQueryItems = 3;
-    List<UUID> itemIds = new ArrayList<>();
-    Map<String, ItemResponse> putItemResponses = new HashMap<>();
-    Map<String, ItemResponse> queryResponses = new HashMap<>();
+
+    Map<String, ItemResponse> responses = new HashMap<>();
+    CountDownLatch latch = new CountDownLatch(1);
+
+    // setup RoxDB.query mock to return 3 items
+    when(roxDB.query(
+            eq(table),
+            eq(partitionKey),
+            eq(Optional.of(sortKeyPrefix + "0")),
+            eq(Optional.of(sortKeyPrefix + "2"))))
+        .thenReturn(
+            List.of(
+                new com.github.lukaszbudnik.roxdb.rocksdb.Item(
+                    new com.github.lukaszbudnik.roxdb.rocksdb.Key(
+                        partitionKey, sortKeyPrefix + "0"),
+                    Map.of("field", "value1")),
+                new com.github.lukaszbudnik.roxdb.rocksdb.Item(
+                    new com.github.lukaszbudnik.roxdb.rocksdb.Key(
+                        partitionKey, sortKeyPrefix + "1"),
+                    Map.of("field", "value2")),
+                new com.github.lukaszbudnik.roxdb.rocksdb.Item(
+                    new com.github.lukaszbudnik.roxdb.rocksdb.Key(
+                        partitionKey, sortKeyPrefix + "2"),
+                    Map.of("field", "value3"))));
 
     // Create and store test items
     StreamObserver<ItemRequest> requestObserver =
@@ -255,14 +463,8 @@ class RoxDBGrpcServiceTest {
             new StreamObserver<ItemResponse>() {
               @Override
               public void onNext(ItemResponse response) {
-                if (response.hasPutItemResponse()) {
-                  // Store put item responses
-                  putItemResponses.put(response.getCorrelationId(), response);
-                }
-                if (response.hasQueryResponse()) {
-                  // Store query responses
-                  queryResponses.put(response.getCorrelationId(), response);
-                }
+                responses.put(response.getCorrelationId(), response);
+                latch.countDown();
               }
 
               @Override
@@ -276,93 +478,136 @@ class RoxDBGrpcServiceTest {
               }
             });
 
-    try {
-      // Insert test items
-      for (int i = 0; i < numberOfItems; i++) {
-        UUID itemId = UUID.randomUUID();
-        itemIds.add(itemId);
+    // Perform query
+    UUID queryId = UUID.randomUUID();
+    // sort keys are inclusive so this will be 3 items: 0, 1, 2
+    String sortKeyStart = sortKeyPrefix + "0";
+    String sortKeyEnd = sortKeyPrefix + "2";
+    ItemRequest.Query queryRequest =
+        ItemRequest.Query.newBuilder()
+            .setTable(table)
+            .setPartitionKey(partitionKey)
+            .setSortKeyStart(sortKeyStart)
+            .setSortKeyEnd(sortKeyEnd)
+            .build();
 
-        Map<String, Object> attributes = new HashMap<>();
-        attributes.put("data", "test-data-" + i);
+    ItemRequest request =
+        ItemRequest.newBuilder()
+            .setCorrelationId(queryId.toString())
+            .setQuery(queryRequest)
+            .build();
 
-        Item item = createTestItem(partitionKey, sortKeyPrefix + i, attributes);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
 
-        ItemRequest putRequest =
-            ItemRequest.newBuilder()
-                .setCorrelationId(itemId.toString())
-                .setPutItem(ItemRequest.PutItem.newBuilder().setItem(item).build())
-                .build();
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
 
-        requestObserver.onNext(putRequest);
-      }
+    verify(roxDB)
+        .query(
+            eq(table),
+            eq(partitionKey),
+            eq(Optional.of(sortKeyStart)),
+            eq(Optional.of(sortKeyEnd)));
 
-      // Perform query
-      UUID queryId = UUID.randomUUID();
-      // sort keys are inclusive so this will be 3 items: 0, 1, 2
-      String sortKeyStart = sortKeyPrefix + "0";
-      String sortKeyEnd = sortKeyPrefix + "2";
-      ItemRequest.Query queryRequest =
-          ItemRequest.Query.newBuilder()
-              .setPartitionKey(partitionKey)
-              .setSortKeyStart(sortKeyStart)
-              .setSortKeyEnd(sortKeyEnd)
-              .build();
+    // Verify query response
+    ItemResponse queryResponse = responses.get(queryId.toString());
+    assertNotNull(queryResponse, "Expected query response");
+    assertTrue(queryResponse.hasQueryResponse(), "Expected query result");
 
-      ItemRequest request =
-          ItemRequest.newBuilder()
-              .setCorrelationId(queryId.toString())
-              .setQuery(queryRequest)
-              .build();
+    ItemResponse.QueryResponse queryResult = queryResponse.getQueryResponse();
+    assertEquals(
+        numberOfQueryItems,
+        queryResult.getItemsQueryResult().getItemsCount(),
+        "Expected to receive " + numberOfQueryItems + " inserted items");
 
-      requestObserver.onNext(request);
-      requestObserver.onCompleted();
+    // Verify query results contain all inserted items
+    Set<String> returnedSortKeys =
+        queryResult.getItemsQueryResult().getItemsList().stream()
+            .map(item -> item.getKey().getSortKey())
+            .collect(Collectors.toSet());
 
-      // Verify results
-      // Verify all put operations succeeded
-      assertEquals(
-          numberOfItems, putItemResponses.size(), "Expected " + numberOfItems + " put responses");
-      for (UUID itemId : itemIds) {
-        ItemResponse putResponse = putItemResponses.get(itemId.toString());
-        assertNotNull(putResponse, "Expected response for item " + itemId);
-        assertTrue(
-            putResponse.hasPutItemResponse(), "Expected success response for item " + itemId);
-        assertEquals(itemId.toString(), putResponse.getCorrelationId());
-        assertEquals(partitionKey, putResponse.getPutItemResponse().getKey().getPartitionKey());
-      }
-
-      // Verify query response
-      ItemResponse queryResponse = queryResponses.get(queryId.toString());
-      assertNotNull(queryResponse, "Expected query response");
-      assertTrue(queryResponse.hasQueryResponse(), "Expected query result");
-
-      ItemResponse.QueryResponse queryResult = queryResponse.getQueryResponse();
-      assertEquals(
-          numberOfQueryItems,
-          queryResult.getItemsQueryResult().getItemsCount(),
-          "Expected to receive " + numberOfQueryItems + " inserted items");
-
-      // Verify query results contain all inserted items
-      Set<String> returnedSortKeys =
-          queryResult.getItemsQueryResult().getItemsList().stream()
-              .map(item -> item.getKey().getSortKey())
-              .collect(Collectors.toSet());
-
-      for (int i = 0; i < numberOfQueryItems; i++) {
-        String expectedSortKey = sortKeyPrefix + i;
-        assertTrue(
-            returnedSortKeys.contains(expectedSortKey),
-            "Expected to find item with sort key: " + expectedSortKey);
-      }
-
-    } catch (Exception e) {
-      requestObserver.onError(e);
-      throw e;
+    for (int i = 0; i < numberOfQueryItems; i++) {
+      String expectedSortKey = sortKeyPrefix + i;
+      assertTrue(
+          returnedSortKeys.contains(expectedSortKey),
+          "Expected to find item with sort key: " + expectedSortKey);
     }
   }
 
-  private Item createTestItem(String partitionKey, String sortKey, Map<String, Object> attributes) {
-    Key key = Key.newBuilder().setPartitionKey(partitionKey).setSortKey(sortKey).build();
+  @Test
+  void handleRockDBExceptions() throws RocksDBException, InterruptedException {
+    UUID putItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "pk1";
+    String sortKey = "sk1";
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("field1", "value1");
+    attributes.put("field2", 123.0);
+    attributes.put("field3", true);
 
-    return Item.newBuilder().setKey(key).setAttributes(ProtoUtils.mapToStruct(attributes)).build();
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    // mock throw exception
+    doThrow(new RocksDBException("Test exception"))
+        .when(roxDB)
+        .putItem(eq(table), any(com.github.lukaszbudnik.roxdb.rocksdb.Item.class));
+
+    ItemRequest putItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(putItemId.toString())
+            .setPutItem(
+                ItemRequest.PutItem.newBuilder()
+                    .setTable(table)
+                    .setItem(
+                        Item.newBuilder()
+                            .setKey(
+                                Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build())
+                            .setAttributes(ProtoUtils.mapToStruct(attributes))
+                            .build())
+                    .build())
+            .build();
+
+    var responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(putItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB).putItem(eq(table), itemCaptor.capture());
+    var capturedItem = itemCaptor.getValue();
+    assertEquals(partitionKey, capturedItem.key().partitionKey());
+    assertEquals(sortKey, capturedItem.key().sortKey());
+    assertEquals(attributes, capturedItem.attributes());
+
+    // verify expected gRPC response
+    ItemResponse putItemResponse = responses.get(putItemId.toString());
+    assertTrue(putItemResponse.hasError(), "Expected to get error response for " + putItemId);
+    assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
+    assertEquals(Error.ROCKS_DB_ERROR.getCode(), putItemResponse.getError().getCode());
+    assertEquals(Error.ROCKS_DB_ERROR.getMessage(), putItemResponse.getError().getMessage());
   }
 }

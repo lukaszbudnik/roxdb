@@ -1,6 +1,6 @@
 plugins {
     id("java")
-    id("com.google.protobuf") version("0.9.4")
+    id("com.google.protobuf") version ("0.9.4")
     id("jacoco")
     id("application")
     id("com.gradleup.shadow") version "8.3.6"
@@ -16,6 +16,8 @@ application {
 repositories {
     mavenCentral()
 }
+
+val mockitoAgent = configurations.create("mockitoAgent")
 
 dependencies {
     implementation("org.rocksdb:rocksdbjni:9.10.0")
@@ -37,6 +39,9 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.grpc:grpc-inprocess:1.71.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.17.0")
+
+    mockitoAgent("org.mockito:mockito-core:5.17.0") { isTransitive = false }
 }
 
 java {
@@ -73,6 +78,7 @@ sourceSets {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("-javaagent:${mockitoAgent.asPath}")
 }
 
 tasks.test {

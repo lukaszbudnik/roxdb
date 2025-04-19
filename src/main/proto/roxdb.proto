@@ -27,6 +27,7 @@ message ItemRequest {
     GetItem get_item = 5;
     DeleteItem delete_item = 6;
     Query query = 7;
+    TransactWriteItems transact_write_items = 8;  // New operation
   }
 
   message PutItem {
@@ -55,23 +56,30 @@ message ItemRequest {
     optional string sort_key_start = 3;
     optional string sort_key_end = 4;
   }
+
+  message TransactWriteItems {
+    repeated TransactWriteItem items = 1;
+  }
+
+  message TransactWriteItem {
+    oneof operation {
+      PutItem put = 1;
+      UpdateItem update = 2;
+      DeleteItem delete = 3;
+    }
+  }
 }
 
 message ItemResponse {
   string correlation_id = 1;
   oneof result {
-    // Response to PutItem
-    PutItemResponse put_item_response = 2;
-    // Response to UpdateItem
-    UpdateItemResponse update_item_response = 3;
-    // Response to GetItem
-    GetItemResponse get_item_response = 4;
-    // Response to DeleteItem
-    DeleteItemResponse delete_item_response = 5;
-    // Response to Query
-    QueryResponse query_response = 6;
-    // Error
-    Error error = 7;
+    Error error = 2;
+    PutItemResponse put_item_response = 3;
+    UpdateItemResponse update_item_response = 4;
+    GetItemResponse get_item_response = 5;
+    DeleteItemResponse delete_item_response = 6;
+    QueryResponse query_response = 7;
+    TransactWriteItemsResponse transact_write_items_response = 8;
   }
 
   // Error structure
@@ -116,6 +124,16 @@ message ItemResponse {
   message DeleteItemResponse {
     oneof result {
       Key key = 1;
+    }
+  }
+
+  message TransactWriteItemsResponse {
+    oneof result {
+      TransactWriteItemsResult transact_write_items_result = 1;
+    }
+
+    message TransactWriteItemsResult {
+      repeated Key modified_keys = 1;
     }
   }
 

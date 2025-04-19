@@ -6,7 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
+import com.github.lukaszbudnik.roxdb.rocksdb.TransactionContext;
+import com.github.lukaszbudnik.roxdb.rocksdb.TransactionOperations;
 import com.github.lukaszbudnik.roxdb.v1.*;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -426,7 +430,7 @@ class RoxDBGrpcServiceTest {
   }
 
   @Test
-  void query() throws Exception {
+  void query() throws RocksDBException, InterruptedException {
     // Setup test data
     String table = "table";
     String partitionKey = "test-partition";
@@ -609,5 +613,172 @@ class RoxDBGrpcServiceTest {
     assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
     assertEquals(Error.ROCKS_DB_ERROR.getCode(), putItemResponse.getError().getCode());
     assertEquals(Error.ROCKS_DB_ERROR.getMessage(), putItemResponse.getError().getMessage());
+  }
+
+  @Test
+  void transactWriteItems() throws InterruptedException, RocksDBException {
+    // Create test data
+    UUID transactWriteItemsId = UUID.randomUUID();
+
+    // Create a Key
+    Key key1 = Key.newBuilder().setPartitionKey("customer#122").setSortKey("order#456").build();
+
+    // Create attributes for the item
+    Struct.Builder attributes1 = Struct.newBuilder();
+    attributes1.putFields("name", Value.newBuilder().setStringValue("Test Item").build());
+    attributes1.putFields("price", Value.newBuilder().setNumberValue(99.99).build());
+
+    // Create an Item
+    Item item1 = Item.newBuilder().setKey(key1).setAttributes(attributes1.build()).build();
+
+    // Create PutItem operation
+    String table1 = "table1";
+    ItemRequest.PutItem putItem =
+        ItemRequest.PutItem.newBuilder().setTable(table1).setItem(item1).build();
+
+    Key key2 = Key.newBuilder().setPartitionKey("customer#123").setSortKey("order#456").build();
+
+    // Create attributes for the item
+    Struct.Builder attributes2 = Struct.newBuilder();
+    attributes2.putFields("name", Value.newBuilder().setStringValue("Test Item").build());
+    attributes2.putFields("price", Value.newBuilder().setNumberValue(99.99).build());
+
+    // Create an Item
+    Item item2 = Item.newBuilder().setKey(key2).setAttributes(attributes2.build()).build();
+    // Update an Item
+    String table2 = "table2";
+    ItemRequest.UpdateItem updateItem =
+        ItemRequest.UpdateItem.newBuilder().setTable(table2).setItem(item2).build();
+
+    // Create DeleteItem operation
+    Key key3 = Key.newBuilder().setPartitionKey("customer#124").setSortKey("order#457").build();
+    String table3 = "table3";
+    ItemRequest.DeleteItem deleteItem =
+        ItemRequest.DeleteItem.newBuilder().setTable(table3).setKey(key3).build();
+
+    // Create TransactWriteItems with multiple operations
+    ItemRequest.TransactWriteItems transactWriteItems =
+        ItemRequest.TransactWriteItems.newBuilder()
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setPut(putItem).build())
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setUpdate(updateItem).build())
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setDelete(deleteItem).build())
+            .build();
+
+    // Create the main ItemRequest
+    ItemRequest request =
+        ItemRequest.newBuilder()
+            .setCorrelationId(transactWriteItemsId.toString())
+            .setTransactWriteItems(transactWriteItems)
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    TransactionContext mockedTxContext = mock(TransactionContext.class);
+
+    doAnswer(
+            invocation -> {
+              // Get the TransactionOperations (the lambda) passed as the argument
+              TransactionOperations transactionOperationsCallback = invocation.getArgument(0);
+
+              // Execute the lambda, passing the mocked TransactionContext
+              transactionOperationsCallback.doInTransaction(mockedTxContext);
+
+              // Simulate successful execution by returning null (since the interface is Void)
+              return null;
+            })
+        .when(roxDB)
+        .executeTransaction(any(TransactionOperations.class));
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify Mocks were called
+    verify(roxDB, times(1)).executeTransaction(any(TransactionOperations.class));
+
+    // Verify that the correct operations were called on the mocked TransactionContext
+    verify(mockedTxContext, times(1))
+        .put(eq(table1), any(com.github.lukaszbudnik.roxdb.rocksdb.Item.class));
+    verify(mockedTxContext, times(1))
+        .update(eq(table2), any(com.github.lukaszbudnik.roxdb.rocksdb.Item.class));
+    verify(mockedTxContext, times(1))
+        .delete(eq(table3), any(com.github.lukaszbudnik.roxdb.rocksdb.Key.class));
+
+    // verify expected gRPC response
+    ItemResponse transactWriteItemsResponse = responses.get(transactWriteItemsId.toString());
+    assertTrue(
+        transactWriteItemsResponse.hasTransactWriteItemsResponse(),
+        "Expected to get transact write items response for " + transactWriteItemsId);
+    assertEquals(transactWriteItemsId.toString(), transactWriteItemsResponse.getCorrelationId());
+    assertEquals(
+        3,
+        transactWriteItemsResponse
+            .getTransactWriteItemsResponse()
+            .getTransactWriteItemsResult()
+            .getModifiedKeysCount(),
+        "Expected to receive 2 items in transact write items response");
+    // first key in response should be the one from put item
+    assertEquals(
+        key1.getPartitionKey() + "#" + key1.getSortKey(),
+        transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(0)
+                .getPartitionKey()
+            + "#"
+            + transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(0)
+                .getSortKey());
+    // second key in response should be the one from update item
+    assertEquals(
+        key2.getPartitionKey() + "#" + key2.getSortKey(),
+        transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(1)
+                .getPartitionKey()
+            + "#"
+            + transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(1)
+                .getSortKey());
+    // third key in response should be the one from delete item
+    assertEquals(
+        key3.getPartitionKey() + "#" + key3.getSortKey(),
+        transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(2)
+                .getPartitionKey()
+            + "#"
+            + transactWriteItemsResponse
+                .getTransactWriteItemsResponse()
+                .getTransactWriteItemsResult()
+                .getModifiedKeys(2)
+                .getSortKey());
   }
 }

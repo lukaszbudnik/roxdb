@@ -69,7 +69,7 @@ public class ProtoUtils {
     throw new IllegalArgumentException("Unsupported type: " + obj.getClass());
   }
 
-  public static Item itemToProto(com.github.lukaszbudnik.roxdb.rocksdb.Item item) {
+  public static Item itemModelToProto(com.github.lukaszbudnik.roxdb.rocksdb.Item item) {
     return Item.newBuilder()
         .setKey(
             Key.newBuilder()
@@ -78,5 +78,16 @@ public class ProtoUtils {
                 .build())
         .setAttributes(ProtoUtils.mapToStruct(item.attributes()))
         .build();
+  }
+
+  public static com.github.lukaszbudnik.roxdb.rocksdb.Item itemProtoToModel(Item item) {
+    return new com.github.lukaszbudnik.roxdb.rocksdb.Item(
+        new com.github.lukaszbudnik.roxdb.rocksdb.Key(
+            item.getKey().getPartitionKey(), item.getKey().getSortKey()),
+        ProtoUtils.structToMap(item.getAttributes()));
+  }
+
+  public static com.github.lukaszbudnik.roxdb.rocksdb.Key keyProtoToModel(Key key) {
+    return new com.github.lukaszbudnik.roxdb.rocksdb.Key(key.getPartitionKey(), key.getSortKey());
   }
 }

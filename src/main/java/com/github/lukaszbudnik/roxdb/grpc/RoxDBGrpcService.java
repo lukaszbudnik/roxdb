@@ -8,6 +8,9 @@ import com.github.lukaszbudnik.roxdb.v1.ItemResponse;
 import com.github.lukaszbudnik.roxdb.v1.RoxDBGrpc;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.rocksdb.RocksDBException;
@@ -28,88 +31,36 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
       @Override
       public void onNext(ItemRequest itemRequest) {
 
+        ItemResponse.Builder responseBuilder =
+            ItemResponse.newBuilder().setCorrelationId(itemRequest.getCorrelationId());
         try {
 
-          if (itemRequest.hasPutItem()) {
-            putItem(responseObserver, itemRequest.getPutItem());
-            responseObserver.onNext(
-                ItemResponse.newBuilder()
-                    .setCorrelationId(itemRequest.getCorrelationId())
-                    .setPutItemResponse(
-                        ItemResponse.PutItemResponse.newBuilder()
-                            .setKey(itemRequest.getPutItem().getItem().getKey())
-                            .build())
-                    .build());
-          }
-          if (itemRequest.hasUpdateItem()) {
-            updateItem(responseObserver, itemRequest.getUpdateItem());
-            responseObserver.onNext(
-                ItemResponse.newBuilder()
-                    .setCorrelationId(itemRequest.getCorrelationId())
-                    .setUpdateItemResponse(
-                        ItemResponse.UpdateItemResponse.newBuilder()
-                            .setKey(itemRequest.getUpdateItem().getItem().getKey())
-                            .build())
-                    .build());
-          }
-          if (itemRequest.hasGetItem()) {
-            var item = getItem(responseObserver, itemRequest.getGetItem());
-            if (item != null) {
-              responseObserver.onNext(
-                  ItemResponse.newBuilder()
-                      .setCorrelationId(itemRequest.getCorrelationId())
-                      .setGetItemResponse(
-                          ItemResponse.GetItemResponse.newBuilder().setItem(item).build())
-                      .build());
-            } else {
-              responseObserver.onNext(
-                  ItemResponse.newBuilder()
-                      .setCorrelationId(itemRequest.getCorrelationId())
-                      .setGetItemResponse(
-                          ItemResponse.GetItemResponse.newBuilder()
-                              .setItemNotFound(
-                                  ItemResponse.GetItemResponse.ItemNotFound.newBuilder()
-                                      .setKey(itemRequest.getGetItem().getKey())
-                                      .build())
-                              .build())
-                      .build());
-            }
-          }
-          if (itemRequest.hasDeleteItem()) {
-            deleteItem(responseObserver, itemRequest.getDeleteItem());
-            responseObserver.onNext(
-                ItemResponse.newBuilder()
-                    .setCorrelationId(itemRequest.getCorrelationId())
-                    .setDeleteItemResponse(
-                        ItemResponse.DeleteItemResponse.newBuilder()
-                            .setKey(itemRequest.getDeleteItem().getKey())
-                            .build())
-                    .build());
-          }
-          if (itemRequest.hasQuery()) {
-            var items = query(responseObserver, itemRequest.getQuery());
-            responseObserver.onNext(
-                ItemResponse.newBuilder()
-                    .setCorrelationId(itemRequest.getCorrelationId())
-                    .setQueryResponse(
-                        ItemResponse.QueryResponse.newBuilder()
-                            .setItemsQueryResult(items.build())
-                            .build())
-                    .build());
+          switch (itemRequest.getOperationCase()) {
+            case PUT_ITEM -> putItem(itemRequest.getPutItem(), responseBuilder);
+
+            case UPDATE_ITEM -> updateItem(itemRequest.getUpdateItem(), responseBuilder);
+
+            case GET_ITEM -> getItem(itemRequest.getGetItem(), responseBuilder);
+
+            case DELETE_ITEM -> deleteItem(itemRequest.getDeleteItem(), responseBuilder);
+
+            case QUERY -> query(itemRequest.getQuery(), responseBuilder);
+
+            case TRANSACT_WRITE_ITEMS ->
+                transactWriteItems(itemRequest.getTransactWriteItems(), responseBuilder);
           }
 
         } catch (RocksDBException e) {
-          responseObserver.onNext(
-              ItemResponse.newBuilder()
-                  .setCorrelationId(itemRequest.getCorrelationId())
-                  .setError(
-                      ItemResponse.Error.newBuilder()
-                          .setMessage(Error.ROCKS_DB_ERROR.getMessage())
-                          .setCode(Error.ROCKS_DB_ERROR.getCode())
-                          .build())
+          responseBuilder.setError(
+              ItemResponse.Error.newBuilder()
+                  .setMessage(Error.ROCKS_DB_ERROR.getMessage())
+                  .setCode(Error.ROCKS_DB_ERROR.getCode())
                   .build());
         } catch (Throwable t) {
           onError(t);
+        } finally {
+          responseObserver.onNext(responseBuilder.build());
+          onCompleted();
         }
       }
 
@@ -126,7 +77,7 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
     };
   }
 
-  private void putItem(StreamObserver<ItemResponse> responseObserver, ItemRequest.PutItem putItem)
+  private void putItem(ItemRequest.PutItem putItem, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     var protoItem = putItem.getItem();
     var tableName = putItem.getTable();
@@ -134,10 +85,12 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
     var key = new Key(protoItem.getKey().getPartitionKey(), protoItem.getKey().getSortKey());
     var item = new Item(key, attributes);
     roxDB.putItem(tableName, item);
+
+    responseBuilder.setPutItemResponse(
+        ItemResponse.PutItemResponse.newBuilder().setKey(putItem.getItem().getKey()).build());
   }
 
-  private void updateItem(
-      StreamObserver<ItemResponse> responseObserver, ItemRequest.UpdateItem updateItem)
+  private void updateItem(ItemRequest.UpdateItem updateItem, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     var protoItem = updateItem.getItem();
     var tableName = updateItem.getTable();
@@ -145,30 +98,43 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
     var key = new Key(protoItem.getKey().getPartitionKey(), protoItem.getKey().getSortKey());
     var item = new Item(key, attributes);
     roxDB.updateItem(tableName, item);
+
+    responseBuilder.setUpdateItemResponse(
+        ItemResponse.UpdateItemResponse.newBuilder().setKey(updateItem.getItem().getKey()).build());
   }
 
-  private com.github.lukaszbudnik.roxdb.v1.Item getItem(
-      StreamObserver<ItemResponse> responseObserver, ItemRequest.GetItem getItem)
+  private void getItem(ItemRequest.GetItem getItem, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     String tableName = getItem.getTable();
     var key = new Key(getItem.getKey().getPartitionKey(), getItem.getKey().getSortKey());
     var item = roxDB.getItem(tableName, key);
-    if (item == null) {
-      return null;
+    if (item != null) {
+      responseBuilder.setGetItemResponse(
+          ItemResponse.GetItemResponse.newBuilder()
+              .setItem(ProtoUtils.itemModelToProto(item))
+              .build());
+    } else {
+      responseBuilder.setGetItemResponse(
+          ItemResponse.GetItemResponse.newBuilder()
+              .setItemNotFound(
+                  ItemResponse.GetItemResponse.ItemNotFound.newBuilder()
+                      .setKey(getItem.getKey())
+                      .build())
+              .build());
     }
-    return ProtoUtils.itemToProto(item);
   }
 
-  private void deleteItem(
-      StreamObserver<ItemResponse> responseObserver, ItemRequest.DeleteItem deleteItem)
+  private void deleteItem(ItemRequest.DeleteItem deleteItem, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     String tableName = deleteItem.getTable();
     var key = new Key(deleteItem.getKey().getPartitionKey(), deleteItem.getKey().getSortKey());
     roxDB.deleteItem(tableName, key);
+
+    responseBuilder.setDeleteItemResponse(
+        ItemResponse.DeleteItemResponse.newBuilder().setKey(deleteItem.getKey()).build());
   }
 
-  private ItemResponse.QueryResponse.ItemsQueryResult.Builder query(
-      StreamObserver<ItemResponse> responseObserver, ItemRequest.Query query)
+  private void query(ItemRequest.Query query, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     String tableName = query.getTable();
     var items =
@@ -179,9 +145,54 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
             Optional.of(query.getSortKeyEnd()));
     var itemsQueryResultBuilder = ItemResponse.QueryResponse.ItemsQueryResult.newBuilder();
     for (var item : items) {
-      var protoItem = ProtoUtils.itemToProto(item);
+      var protoItem = ProtoUtils.itemModelToProto(item);
       itemsQueryResultBuilder.addItems(protoItem);
     }
-    return itemsQueryResultBuilder;
+
+    responseBuilder.setQueryResponse(
+        ItemResponse.QueryResponse.newBuilder()
+            .setItemsQueryResult(itemsQueryResultBuilder.build())
+            .build());
+  }
+
+  private void transactWriteItems(
+      ItemRequest.TransactWriteItems transactWriteItems, ItemResponse.Builder responseBuilder)
+      throws RocksDBException {
+    List<com.github.lukaszbudnik.roxdb.v1.Key> modifiedKeys = new ArrayList<>();
+
+    roxDB.executeTransaction(
+        (txCtx) -> {
+          for (ItemRequest.TransactWriteItem transactWriteItem :
+              transactWriteItems.getItemsList()) {
+            switch (transactWriteItem.getOperationCase()) {
+              case PUT -> {
+                txCtx.put(
+                    transactWriteItem.getPut().getTable(),
+                    ProtoUtils.itemProtoToModel(transactWriteItem.getPut().getItem()));
+                modifiedKeys.add(transactWriteItem.getPut().getItem().getKey());
+              }
+              case UPDATE -> {
+                txCtx.update(
+                    transactWriteItem.getUpdate().getTable(),
+                    ProtoUtils.itemProtoToModel(transactWriteItem.getUpdate().getItem()));
+                modifiedKeys.add(transactWriteItem.getUpdate().getItem().getKey());
+              }
+              case DELETE -> {
+                txCtx.delete(
+                    transactWriteItem.getDelete().getTable(),
+                    ProtoUtils.keyProtoToModel(transactWriteItem.getDelete().getKey()));
+                modifiedKeys.add(transactWriteItem.getDelete().getKey());
+              }
+            }
+          }
+        });
+
+    responseBuilder.setTransactWriteItemsResponse(
+        ItemResponse.TransactWriteItemsResponse.newBuilder()
+            .setTransactWriteItemsResult(
+                ItemResponse.TransactWriteItemsResponse.TransactWriteItemsResult.newBuilder()
+                    .addAllModifiedKeys(modifiedKeys)
+                    .build())
+            .build());
   }
 }

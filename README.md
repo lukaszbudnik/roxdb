@@ -28,7 +28,7 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 
 ## Features
 
-* **DynamoDB-like API:** `PutItem`, `UpdateItem`, `DeleteItem`, `GetItem`, `Query`.
+* **DynamoDB-like API:** `PutItem`, `UpdateItem`, `DeleteItem`, `GetItem`, `Query`, `TransactWriteItems`.
 * **RocksDB Storage:** Utilizing RocksDB for fast and reliable data storage.
 * **gRPC Interface:** Providing a high-performance gRPC API for client interactions.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
@@ -189,6 +189,5 @@ This project is licensed under the Apache 2.0 License. See the `LICENSE` file fo
 
 ## Future Work
 
-* Future features or improvements: global secondary indexes, enhanced consistency.
-* Add more DynamoDB API implementations: `TransactWriteItems`.
+* Future features or improvements: delete by partition, multi-tenancy, global secondary indexes.
 * Improve performance and scalability.

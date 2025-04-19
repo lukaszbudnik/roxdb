@@ -1,12 +1,7 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.*;
+
 import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +14,10 @@ public class RoxDBImpl implements RoxDB {
   }
 
   private final String dbPath;
-  private final RocksDB db;
+  private final TransactionDB db;
   private final Map<String, ColumnFamilyHandle> columnFamilies;
-  private final Kryo kryo;
   private final DBOptions dbOptions;
+  private final TransactionDBOptions transactionDbOptions;
   private final List<ColumnFamilyHandle> columnFamilyHandles;
 
   public RoxDBImpl(String dbPath) throws RocksDBException {
@@ -42,6 +37,8 @@ public class RoxDBImpl implements RoxDB {
             .setCreateMissingColumnFamilies(true)
             .setStatistics(statistics);
 
+    this.transactionDbOptions = new TransactionDBOptions();
+
     // Get list of existing column families
     List<byte[]> existingCFs = RocksDB.listColumnFamilies(new Options(), dbPath);
 
@@ -58,7 +55,9 @@ public class RoxDBImpl implements RoxDB {
     }
 
     // Open DB with column families
-    this.db = RocksDB.open(dbOptions, dbPath, columnFamilyDescriptors, columnFamilyHandles);
+    this.db =
+        TransactionDB.open(
+            dbOptions, transactionDbOptions, dbPath, columnFamilyDescriptors, columnFamilyHandles);
 
     // Map column family handles
     for (int i = 0; i < columnFamilyHandles.size(); i++) {
@@ -66,13 +65,11 @@ public class RoxDBImpl implements RoxDB {
       columnFamilies.put(cfName, columnFamilyHandles.get(i));
     }
 
-    this.kryo = new Kryo();
-    this.kryo.register(HashMap.class);
-
     logger.info("RocksDB instance initialized");
   }
 
-  private ColumnFamilyHandle getOrCreateColumnFamily(String tableName) throws RocksDBException {
+  @Override
+  public ColumnFamilyHandle getOrCreateColumnFamily(String tableName) throws RocksDBException {
     if (!columnFamilies.containsKey(tableName)) {
       ColumnFamilyDescriptor cfDescriptor = new ColumnFamilyDescriptor(tableName.getBytes());
       ColumnFamilyHandle cfHandle = db.createColumnFamily(cfDescriptor);
@@ -89,19 +86,9 @@ public class RoxDBImpl implements RoxDB {
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
 
     // Convert key to bytes
-    byte[] key = item.key().toStorageKey().getBytes();
+    byte[] key = SerDeUtils.serializeKey(item);
     // Convert attributes to bytes
-    byte[] value = null;
-    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        Output output = new Output(baos)) {
-      kryo.writeObject(output, item.attributes());
-      // needs explicit flush
-      output.flush();
-      value = baos.toByteArray();
-    } catch (IOException e) {
-      logger.error("Error serializing item: {}", item.key().toStorageKey(), e);
-      throw new RuntimeException(e);
-    }
+    byte[] value = SerDeUtils.serializeAttributes(item);
 
     // Store in RocksDB
     db.put(cfHandle, key, value);
@@ -144,10 +131,7 @@ public class RoxDBImpl implements RoxDB {
     }
 
     // Convert bytes to Map
-    Map<String, Object> attributes = null;
-    try (Input input = new Input(value)) {
-      attributes = kryo.readObject(input, HashMap.class);
-    }
+    Map<String, Object> attributes = SerDeUtils.deserializeAttributes(value);
     Item item = new Item(key, attributes);
     logger.debug("Item found: {}", item.key().toStorageKey());
     return item;
@@ -192,10 +176,7 @@ public class RoxDBImpl implements RoxDB {
         }
 
         // Add matching item to results
-        Map<String, Object> attributes = null;
-        try (Input input = new Input(iterator.value())) {
-          attributes = kryo.readObject(input, HashMap.class);
-        }
+        Map<String, Object> attributes = SerDeUtils.deserializeAttributes(iterator.value());
 
         results.add(new Item(new Key(partitionKey, currentSortKey), attributes));
 
@@ -218,6 +199,24 @@ public class RoxDBImpl implements RoxDB {
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
     db.delete(cfHandle, key.toStorageKey().getBytes());
     logger.debug("Deleted: {}", key.toStorageKey());
+  }
+
+  @Override
+  public void executeTransaction(TransactionOperations transactionOperations)
+      throws RocksDBException {
+    Transaction transaction = db.beginTransaction(new WriteOptions());
+    try {
+      logger.debug("Executing transaction: {}", transaction.getID());
+      transactionOperations.doInTransaction(new TransactionContext(this, transaction));
+      transaction.commit();
+      logger.debug("Transaction committed: {}", transaction.getID());
+    } catch (Exception e) {
+      transaction.rollback();
+      logger.error("Transaction rolled back: {}", transaction.getID(), e);
+      throw e;
+    } finally {
+      transaction.close();
+    }
   }
 
   @Override

@@ -85,6 +85,18 @@ class RoxDBImplTest {
     Item retrievedDeletedItem = roxdb.getItem("users", key);
     log.trace("Retrieved item: {}", retrievedDeletedItem);
     Assertions.assertNull(retrievedDeletedItem);
+
+    // Put item
+    Key key2 = new Key("user123", "payment");
+    Map<String, Object> attributes2 = new HashMap<>();
+    attributes2.put("type", "cash");
+    Item item2 = new Item(key2, attributes2);
+    // Update on non-existing item will create that item
+    roxdb.updateItem("users", item2);
+
+    Item retrievedItem2 = roxdb.getItem("users", key2);
+    log.trace("Retrieved item: {}", retrievedItem2);
+    Assertions.assertEquals(item2, retrievedItem2);
   }
 
   @Test
@@ -155,5 +167,40 @@ class RoxDBImplTest {
     log.trace("Query results: {}", queryResultsPrefixAB);
     Assertions.assertEquals(1, queryResultsPrefixAB.size());
     Assertions.assertEquals(addressItem, queryResultsPrefixAB.get(0));
+  }
+
+  @Test
+  void transaction() throws RocksDBException {
+    Key key = new Key("user123", "profile");
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("message", "Hello World");
+    attributes.put("number", 123);
+    Item item = new Item(key, attributes);
+
+    Key key2 = new Key("user123", "payment");
+    Map<String, Object> attributes2 = new HashMap<>();
+    attributes2.put("payment", "12345");
+    Item item2 = new Item(key2, attributes2);
+
+    String table = "users";
+
+    roxdb.executeTransaction(
+        (txCtx) -> {
+          txCtx.put(table, item);
+          // item2 does not exist - update will call put straight away
+          txCtx.update(table, item2);
+          // item already exists - update will merge new and old attributes
+          item.attributes().put("new_attribute", "new value");
+          txCtx.update(table, item);
+          txCtx.delete(table, key2);
+        });
+
+    Item retrievedItem = roxdb.getItem("users", key);
+    log.trace("Retrieved item1: {}", retrievedItem);
+    Assertions.assertEquals(item, retrievedItem);
+
+    Item retrievedItem2 = roxdb.getItem("users", key2);
+    log.trace("Retrieved item2: {}", retrievedItem2);
+    Assertions.assertNull(retrievedItem2);
   }
 }

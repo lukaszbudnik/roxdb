@@ -20,7 +20,7 @@ repositories {
 val mockitoAgent = configurations.create("mockitoAgent")
 
 dependencies {
-    implementation("org.rocksdb:rocksdbjni:9.10.0")
+    implementation("org.rocksdb:rocksdbjni:10.0.1")
     implementation("com.esotericsoftware:kryo:5.6.2")
     implementation("commons-io:commons-io:2.19.0")
 

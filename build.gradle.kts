@@ -38,7 +38,7 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("io.grpc:grpc-inprocess:1.71.0")
+    testImplementation("io.grpc:grpc-inprocess:1.72.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.17.0")
 
     mockitoAgent("org.mockito:mockito-core:5.17.0") { isTransitive = false }

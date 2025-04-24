@@ -1,5 +1,6 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import org.rocksdb.*;
@@ -8,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 public class RoxDBImpl implements RoxDB {
   private static final Logger logger = LoggerFactory.getLogger(RoxDBImpl.class);
+  public static final char PARTITION_SORT_KEY_SEPARATOR = '\u001F';
 
   static {
     RocksDB.loadLibrary();
@@ -86,14 +88,15 @@ public class RoxDBImpl implements RoxDB {
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
 
     // Convert key to bytes
-    byte[] key = SerDeUtils.serializeKey(item);
+    byte[] key = SerDeUtils.serializeKey(item.key());
     // Convert attributes to bytes
     byte[] value = SerDeUtils.serializeAttributes(item);
 
     // Store in RocksDB
     db.put(cfHandle, key, value);
 
-    logger.debug("Item put: {}", item.key().toStorageKey());
+    String storageKey = new String(key, StandardCharsets.UTF_8);
+    logger.debug("Item put: {}", storageKey);
   }
 
   //  UpdateItem operation
@@ -122,18 +125,22 @@ public class RoxDBImpl implements RoxDB {
   public Item getItem(String tableName, Key key) throws RocksDBException {
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
 
+    // Convert key to bytes
+    byte[] keyBytes = SerDeUtils.serializeKey(key);
+    String storageKey = new String(keyBytes, StandardCharsets.UTF_8);
+
     // Get from RocksDB
-    byte[] value = db.get(cfHandle, key.toStorageKey().getBytes());
+    byte[] value = db.get(cfHandle, keyBytes);
 
     if (value == null) {
-      logger.debug("Item not found: {}", key.toStorageKey());
+      logger.debug("Item not found: {}", storageKey);
       return null;
     }
 
     // Convert bytes to Map
     Map<String, Object> attributes = SerDeUtils.deserializeAttributes(value);
     Item item = new Item(key, attributes);
-    logger.debug("Item found: {}", item.key().toStorageKey());
+    logger.debug("Item found: {}", storageKey);
     return item;
   }
 
@@ -151,7 +158,7 @@ public class RoxDBImpl implements RoxDB {
     // Create RocksDB iterator
     try (RocksIterator iterator = db.newIterator(cfHandle)) {
       // Seek to the first potential match
-      String seekKey = partitionKey + "#";
+      String seekKey = partitionKey + PARTITION_SORT_KEY_SEPARATOR;
       iterator.seek(seekKey.getBytes());
 
       // Iterate through matching items
@@ -163,7 +170,7 @@ public class RoxDBImpl implements RoxDB {
           break;
         }
 
-        String currentSortKey = currentKey.split("#")[1];
+        String currentSortKey = currentKey.split(String.valueOf(PARTITION_SORT_KEY_SEPARATOR))[1];
 
         // Apply sort key range conditions if specified
         if (sortKeyStart.isPresent() && currentSortKey.compareTo(sortKeyStart.get()) < 0) {
@@ -185,8 +192,9 @@ public class RoxDBImpl implements RoxDB {
     }
 
     logger.debug(
-        "QueryResults for: {}#{}-{} found items: {}",
+        "QueryResults for: {}{}{}-{} found items: {}",
         partitionKey,
+        PARTITION_SORT_KEY_SEPARATOR,
         sortKeyStart,
         sortKeyEnd,
         results.size());
@@ -197,8 +205,10 @@ public class RoxDBImpl implements RoxDB {
   @Override
   public void deleteItem(String tableName, Key key) throws RocksDBException {
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
-    db.delete(cfHandle, key.toStorageKey().getBytes());
-    logger.debug("Deleted: {}", key.toStorageKey());
+    byte[] keyBytes = SerDeUtils.serializeKey(key);
+    db.delete(cfHandle, keyBytes);
+    String storageKey = new String(keyBytes, StandardCharsets.UTF_8);
+    logger.debug("Deleted: {}", storageKey);
   }
 
   @Override

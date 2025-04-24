@@ -73,13 +73,17 @@ message ItemRequest {
 message ItemResponse {
   string correlation_id = 1;
   oneof result {
-    Error error = 2;
+    Errors errors = 2;
     PutItemResponse put_item_response = 3;
     UpdateItemResponse update_item_response = 4;
     GetItemResponse get_item_response = 5;
     DeleteItemResponse delete_item_response = 6;
     QueryResponse query_response = 7;
     TransactWriteItemsResponse transact_write_items_response = 8;
+  }
+
+  message Errors {
+    repeated Error error = 1;
   }
 
   // Error structure

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,8 +20,9 @@ public class SerDeUtils {
     kryo.register(HashMap.class);
   }
 
-  public static byte[] serializeKey(Item item) {
-    return item.key().toStorageKey().getBytes();
+  public static byte[] serializeKey(Key key) {
+    String storageKey = key.partitionKey() + RoxDBImpl.PARTITION_SORT_KEY_SEPARATOR + key.sortKey();
+    return storageKey.getBytes(StandardCharsets.UTF_8);
   }
 
   public static byte[] serializeAttributes(Item item) {
@@ -32,7 +34,9 @@ public class SerDeUtils {
       output.flush();
       value = baos.toByteArray();
     } catch (IOException e) {
-      logger.error("Error serializing item: {}", item.key().toStorageKey(), e);
+      String storageKey =
+          item.key().partitionKey() + RoxDBImpl.PARTITION_SORT_KEY_SEPARATOR + item.key().sortKey();
+      logger.error("Error serializing item: {}", storageKey, e);
       throw new RuntimeException(e);
     }
     return value;

@@ -75,10 +75,10 @@ class ProtoUtilsTest {
         new com.github.lukaszbudnik.roxdb.rocksdb.Item(modelKey, attributes);
 
     // Convert model to proto
-    Item protoItem = ProtoUtils.itemModelToProto(modelItem);
+    Item protoItem = ProtoUtils.modelToProto(modelItem);
 
     // Convert proto back to model
-    com.github.lukaszbudnik.roxdb.rocksdb.Item resultItem = ProtoUtils.itemProtoToModel(protoItem);
+    com.github.lukaszbudnik.roxdb.rocksdb.Item resultItem = ProtoUtils.protoToModel(protoItem);
 
     // Verify
     assertEquals(modelItem.key().partitionKey(), resultItem.key().partitionKey());
@@ -88,12 +88,12 @@ class ProtoUtilsTest {
 
   @Test
   @DisplayName("Should convert Key proto to model")
-  void testKeyProtoToModel() {
+  void testProtoToModel() {
     // Create proto key
     Key protoKey = Key.newBuilder().setPartitionKey("partition1").setSortKey("sort1").build();
 
     // Convert to model
-    com.github.lukaszbudnik.roxdb.rocksdb.Key modelKey = ProtoUtils.keyProtoToModel(protoKey);
+    com.github.lukaszbudnik.roxdb.rocksdb.Key modelKey = ProtoUtils.protoToModel(protoKey);
 
     // Verify
     assertEquals(protoKey.getPartitionKey(), modelKey.partitionKey());

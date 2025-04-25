@@ -189,5 +189,5 @@ This project is licensed under the Apache 2.0 License. See the `LICENSE` file fo
 
 ## Future Work
 
-* Future features or improvements: delete by partition, multi-tenancy, global secondary indexes.
+* Future features or improvements: delete by partition, global secondary indexes.
 * Improve performance and scalability.

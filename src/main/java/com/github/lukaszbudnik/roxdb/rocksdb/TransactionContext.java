@@ -19,10 +19,11 @@ public class TransactionContext {
   }
 
   public void put(String tableName, Item item) throws RocksDBException {
-    byte[] key = SerDeUtils.serializeKey(item);
+    byte[] key = SerDeUtils.serializeKey(item.key());
     byte[] value = SerDeUtils.serializeAttributes(item);
     transaction.put(roxDB.getOrCreateColumnFamily(tableName), key, value);
-    logger.debug("Transaction {} put: {}", transaction.getID(), item.key().toStorageKey());
+    String storageKey = new String(key, java.nio.charset.StandardCharsets.UTF_8);
+    logger.debug("Transaction {} put: {}", transaction.getID(), storageKey);
   }
 
   public void update(String tableName, Item item) throws RocksDBException {
@@ -45,26 +46,29 @@ public class TransactionContext {
   }
 
   public void delete(String tableName, Key key) throws RocksDBException {
-    byte[] keyBytes = key.toStorageKey().getBytes();
+    byte[] keyBytes = SerDeUtils.serializeKey(key);
+    String storageKey = new String(keyBytes, java.nio.charset.StandardCharsets.UTF_8);
     transaction.delete(roxDB.getOrCreateColumnFamily(tableName), keyBytes);
-    logger.debug("Transaction {} delete: {}", transaction.getID(), key.toStorageKey());
+    logger.debug("Transaction {} delete: {}", transaction.getID(), storageKey);
   }
 
   // get operation
   public Item get(String tableName, Key key) throws RocksDBException {
-    byte[] keyBytes = key.toStorageKey().getBytes();
+    byte[] keyBytes = SerDeUtils.serializeKey(key);
+    String storageKey = new String(keyBytes, java.nio.charset.StandardCharsets.UTF_8);
     byte[] value =
-        transaction.get(new ReadOptions(), roxDB.getOrCreateColumnFamily(tableName), keyBytes);
+        transaction.getForUpdate(
+            new ReadOptions(), roxDB.getOrCreateColumnFamily(tableName), keyBytes, false);
 
     if (value == null) {
-      logger.debug("Transaction {} item not found: {}", transaction.getID(), key.toStorageKey());
+      logger.debug("Transaction {} item not found: {}", transaction.getID(), storageKey);
       return null;
     }
 
     // Convert bytes to Map
     Map<String, Object> attributes = SerDeUtils.deserializeAttributes(value);
     Item item = new Item(key, attributes);
-    logger.debug("Transaction {} item found: {}", transaction.getID(), item.key().toStorageKey());
+    logger.debug("Transaction {} item found: {}", transaction.getID(), storageKey);
     return item;
   }
 }

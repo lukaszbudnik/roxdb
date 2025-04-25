@@ -54,7 +54,6 @@ class RoxDBImplTest {
 
     // Get item
     Item retrievedItem = roxdb.getItem("users", key);
-    log.trace("Retrieved item: {}", retrievedItem);
     Assertions.assertEquals(item, retrievedItem);
 
     // Update item
@@ -66,7 +65,6 @@ class RoxDBImplTest {
 
     // Get updated item
     Item retrievedUpdatedItem = roxdb.getItem("users", key);
-    log.trace("Retrieved item: {}", retrievedUpdatedItem);
     Assertions.assertEquals(updatedItem.key(), retrievedUpdatedItem.key());
     // the item is updated and should have attributes from the original retrievedItem and
     // updatedItem merged
@@ -83,7 +81,6 @@ class RoxDBImplTest {
     // Delete item
     roxdb.deleteItem("users", key);
     Item retrievedDeletedItem = roxdb.getItem("users", key);
-    log.trace("Retrieved item: {}", retrievedDeletedItem);
     Assertions.assertNull(retrievedDeletedItem);
 
     // Put item
@@ -95,7 +92,6 @@ class RoxDBImplTest {
     roxdb.updateItem("users", item2);
 
     Item retrievedItem2 = roxdb.getItem("users", key2);
-    log.trace("Retrieved item: {}", retrievedItem2);
     Assertions.assertEquals(item2, retrievedItem2);
   }
 
@@ -133,7 +129,6 @@ class RoxDBImplTest {
             Optional.empty(), // sort key start
             Optional.empty() // sort key end
             );
-    log.trace("Query results: {}", queryResults);
     Assertions.assertEquals(3, queryResults.size());
     // keys are sorted so first is address, payment, then profile
     Assertions.assertEquals(addressItem, queryResults.get(0));
@@ -150,7 +145,6 @@ class RoxDBImplTest {
             Optional.of("p"), // sort key start
             Optional.empty() // sort key end
             );
-    log.trace("Query results: {}", queryResultsPrefixP);
     Assertions.assertEquals(2, queryResultsPrefixP.size());
     Assertions.assertEquals(paymentItem, queryResultsPrefixP.get(0));
     Assertions.assertEquals(profileItem, queryResultsPrefixP.get(1));
@@ -164,7 +158,6 @@ class RoxDBImplTest {
             Optional.of("a"), // sort key start
             Optional.of("b") // sort key end
             );
-    log.trace("Query results: {}", queryResultsPrefixAB);
     Assertions.assertEquals(1, queryResultsPrefixAB.size());
     Assertions.assertEquals(addressItem, queryResultsPrefixAB.get(0));
   }
@@ -196,11 +189,46 @@ class RoxDBImplTest {
         });
 
     Item retrievedItem = roxdb.getItem("users", key);
-    log.trace("Retrieved item1: {}", retrievedItem);
     Assertions.assertEquals(item, retrievedItem);
 
     Item retrievedItem2 = roxdb.getItem("users", key2);
-    log.trace("Retrieved item2: {}", retrievedItem2);
+    Assertions.assertNull(retrievedItem2);
+  }
+
+  // test interrupted transaction
+  @Test
+  void transactionInterrupted() throws RocksDBException {
+    Key key = new Key("user123", "profile");
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("message", "Hello World");
+    attributes.put("number", 123);
+    Item item = new Item(key, attributes);
+
+    Key key2 = new Key("user123", "payment");
+    Map<String, Object> attributes2 = new HashMap<>();
+    attributes2.put("payment", "12345");
+    Item item2 = new Item(key2, attributes2);
+
+    String table = "users";
+
+    Assertions.assertThrows(
+        RuntimeException.class,
+        () -> {
+          roxdb.executeTransaction(
+              (txCtx) -> {
+                txCtx.put(table, item);
+                // item2 does not exist - update will call put straight away
+                txCtx.update(table, item2);
+                // item already exists - update will merge new and old attributes
+                item.attributes().put("new_attribute", "new value");
+                txCtx.update(table, item);
+                txCtx.delete(table, key2);
+                throw new RuntimeException("interrupted");
+              });
+        });
+    Item retrievedItem = roxdb.getItem("users", key);
+    Assertions.assertNull(retrievedItem);
+    Item retrievedItem2 = roxdb.getItem("users", key2);
     Assertions.assertNull(retrievedItem2);
   }
 }

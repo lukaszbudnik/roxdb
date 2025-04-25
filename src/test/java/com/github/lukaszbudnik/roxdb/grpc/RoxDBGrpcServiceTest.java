@@ -1,5 +1,6 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
+import static com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl.PARTITION_SORT_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,8 +12,7 @@ import com.github.lukaszbudnik.roxdb.rocksdb.TransactionOperations;
 import com.github.lukaszbudnik.roxdb.v1.*;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
-import io.grpc.ManagedChannel;
-import io.grpc.Server;
+import io.grpc.*;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
@@ -550,7 +550,7 @@ class RoxDBGrpcServiceTest {
     attributes.put("field3", true);
 
     CountDownLatch latch = new CountDownLatch(1);
-    Map<String, ItemResponse> responses = new HashMap<>();
+    Map<Status.Code, StatusRuntimeException> responses = new HashMap<>();
 
     // mock throw exception
     doThrow(new RocksDBException("Test exception"))
@@ -579,13 +579,14 @@ class RoxDBGrpcServiceTest {
         new StreamObserver<ItemResponse>() {
           @Override
           public void onNext(ItemResponse itemResponse) {
-            responses.put(itemResponse.getCorrelationId(), itemResponse);
-            latch.countDown();
+            fail("onNext should not be called");
           }
 
           @Override
           public void onError(Throwable throwable) {
-            fail("onError should not be called");
+            StatusRuntimeException exception = (StatusRuntimeException) throwable;
+            responses.put(exception.getStatus().getCode(), exception);
+            latch.countDown();
           }
 
           @Override
@@ -608,11 +609,21 @@ class RoxDBGrpcServiceTest {
     assertEquals(attributes, capturedItem.attributes());
 
     // verify expected gRPC response
-    ItemResponse putItemResponse = responses.get(putItemId.toString());
-    assertTrue(putItemResponse.hasError(), "Expected to get error response for " + putItemId);
-    assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
-    assertEquals(Error.ROCKS_DB_ERROR.getCode(), putItemResponse.getError().getCode());
-    assertEquals(Error.ROCKS_DB_ERROR.getMessage(), putItemResponse.getError().getMessage());
+    StatusRuntimeException putItemException = responses.get(Status.INTERNAL.getCode());
+    assertNotNull(putItemException, "Expected to get put item exception");
+    assertEquals("Internal server error", putItemException.getStatus().getDescription());
+    // verify Metadata correlationId
+    assertEquals(
+        putItemId.toString(),
+        putItemException
+            .getTrailers()
+            .get(Metadata.Key.of("correlationId", Metadata.ASCII_STRING_MARSHALLER)));
+    // verify Metadata exception
+    assertEquals(
+        RocksDBException.class.getCanonicalName(),
+        putItemException
+            .getTrailers()
+            .get(Metadata.Key.of("exception", Metadata.ASCII_STRING_MARSHALLER)));
   }
 
   @Test
@@ -780,5 +791,255 @@ class RoxDBGrpcServiceTest {
                 .getTransactWriteItemsResult()
                 .getModifiedKeys(2)
                 .getSortKey());
+  }
+
+  @Test
+  void putItemValidationErrors() throws RocksDBException, InterruptedException {
+    UUID putItemId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "";
+    String sortKey = "";
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("field1", "value1");
+    attributes.put("field2", 123.0);
+    attributes.put("field3", true);
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    ItemRequest putItemRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(putItemId.toString())
+            .setPutItem(
+                ItemRequest.PutItem.newBuilder()
+                    .setTable(table)
+                    .setItem(
+                        Item.newBuilder()
+                            .setKey(
+                                Key.newBuilder()
+                                    .setPartitionKey(partitionKey)
+                                    .setSortKey(sortKey)
+                                    .build())
+                            .setAttributes(ProtoUtils.mapToStruct(attributes))
+                            .build())
+                    .build())
+            .build();
+
+    var responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(putItemRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify gRPC response contains Errors message
+    ItemResponse putItemResponse = responses.get(putItemId.toString());
+    assertTrue(putItemResponse.hasErrors(), "Expected to get errors for " + putItemId);
+    assertEquals(putItemId.toString(), putItemResponse.getCorrelationId());
+    assertEquals(
+        2,
+        putItemResponse.getErrors().getErrorCount(),
+        "Expected to get 2 errors for " + putItemId);
+    assertEquals(
+        "Partition key cannot be blank", putItemResponse.getErrors().getError(0).getMessage());
+    assertEquals("Sort key cannot be blank", putItemResponse.getErrors().getError(1).getMessage());
+  }
+
+  @Test
+  void queryWithValidationErrors() throws RocksDBException, InterruptedException {
+    UUID queryId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "";
+    String sortKey = "";
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("field1", "value1");
+    attributes.put("field2", 123.0);
+    attributes.put("field3", true);
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    ItemRequest queryRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(queryId.toString())
+            .setQuery(
+                ItemRequest.Query.newBuilder()
+                    .setTable(table)
+                    .setPartitionKey(partitionKey)
+                    .setSortKeyStart(sortKey)
+                    .setSortKeyEnd(sortKey + PARTITION_SORT_KEY_SEPARATOR)
+                    .build())
+            .build();
+
+    var responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(queryRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify gRPC response contains Errors message
+    ItemResponse queryResponse = responses.get(queryId.toString());
+    assertTrue(queryResponse.hasErrors(), "Expected to get errors for " + queryId);
+    assertEquals(queryId.toString(), queryResponse.getCorrelationId());
+    assertEquals(
+        3, queryResponse.getErrors().getErrorCount(), "Expected to get 2 errors for " + queryId);
+    assertEquals(
+        "Partition key cannot be blank", queryResponse.getErrors().getError(0).getMessage());
+    assertEquals("Sort key cannot be blank", queryResponse.getErrors().getError(1).getMessage());
+    assertEquals(
+        "Sort key cannot contain character U+001F",
+        queryResponse.getErrors().getError(2).getMessage());
+  }
+
+  @Test
+  void transactWriteItemsWithValidationErrors() throws InterruptedException {
+    // Create test data
+    UUID transactWriteItemsId = UUID.randomUUID();
+
+    // Create a Key
+    Key key1 =
+        Key.newBuilder().setPartitionKey("" + PARTITION_SORT_KEY_SEPARATOR).setSortKey("").build();
+
+    // Create attributes for the item
+    Struct.Builder attributes1 = Struct.newBuilder();
+    attributes1.putFields("name", Value.newBuilder().setStringValue("Test Item").build());
+    attributes1.putFields("price", Value.newBuilder().setNumberValue(99.99).build());
+
+    // Create an Item
+    Item item1 = Item.newBuilder().setKey(key1).setAttributes(attributes1.build()).build();
+
+    // Create PutItem operation
+    String table1 = "table1";
+    ItemRequest.PutItem putItem =
+        ItemRequest.PutItem.newBuilder().setTable(table1).setItem(item1).build();
+
+    Key key2 =
+        Key.newBuilder().setPartitionKey("").setSortKey("" + PARTITION_SORT_KEY_SEPARATOR).build();
+
+    // Create attributes for the item
+    Struct.Builder attributes2 = Struct.newBuilder();
+    attributes2.putFields("name", Value.newBuilder().setStringValue("Test Item").build());
+    attributes2.putFields("price", Value.newBuilder().setNumberValue(99.99).build());
+
+    // Create an Item
+    Item item2 = Item.newBuilder().setKey(key2).setAttributes(attributes2.build()).build();
+    // Update an Item
+    String table2 = "table2";
+    ItemRequest.UpdateItem updateItem =
+        ItemRequest.UpdateItem.newBuilder().setTable(table2).setItem(item2).build();
+
+    // Create DeleteItem operation
+    Key key3 =
+        Key.newBuilder().setPartitionKey("" + PARTITION_SORT_KEY_SEPARATOR).setSortKey("").build();
+    String table3 = "table3";
+    ItemRequest.DeleteItem deleteItem =
+        ItemRequest.DeleteItem.newBuilder().setTable(table3).setKey(key3).build();
+
+    // Create TransactWriteItems with multiple operations
+    ItemRequest.TransactWriteItems transactWriteItems =
+        ItemRequest.TransactWriteItems.newBuilder()
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setPut(putItem).build())
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setUpdate(updateItem).build())
+            .addItems(ItemRequest.TransactWriteItem.newBuilder().setDelete(deleteItem).build())
+            .build();
+
+    // Create the main ItemRequest
+    ItemRequest request =
+        ItemRequest.newBuilder()
+            .setCorrelationId(transactWriteItemsId.toString())
+            .setTransactWriteItems(transactWriteItems)
+            .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    StreamObserver<ItemResponse> responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+    // verify gRPC response contains Errors message
+    ItemResponse transactWriteItemsResponse = responses.get(transactWriteItemsId.toString());
+    assertTrue(
+        transactWriteItemsResponse.hasErrors(),
+        "Expected to get errors for " + transactWriteItemsId);
+    assertEquals(transactWriteItemsId.toString(), transactWriteItemsResponse.getCorrelationId());
+    assertEquals(
+        6,
+        transactWriteItemsResponse.getErrors().getErrorCount(),
+        "Expected to get 6 errors for " + transactWriteItemsId);
+    assertEquals(
+        "Partition key cannot contain character U+001F",
+        transactWriteItemsResponse.getErrors().getError(0).getMessage());
+    assertEquals(
+        "Sort key cannot be blank",
+        transactWriteItemsResponse.getErrors().getError(1).getMessage());
+    assertEquals(
+        "Partition key cannot be blank",
+        transactWriteItemsResponse.getErrors().getError(2).getMessage());
+    assertEquals(
+        "Sort key cannot contain character U+001F",
+        transactWriteItemsResponse.getErrors().getError(3).getMessage());
+    assertEquals(
+        "Partition key cannot contain character U+001F",
+        transactWriteItemsResponse.getErrors().getError(4).getMessage());
+    assertEquals(
+        "Sort key cannot be blank",
+        transactWriteItemsResponse.getErrors().getError(5).getMessage());
   }
 }

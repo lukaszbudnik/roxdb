@@ -10,7 +10,7 @@ spec:
       storage: 1Gi
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: roxdb
 spec:
@@ -24,39 +24,61 @@ spec:
         app: roxdb
     spec:
       containers:
-      - name: roxdb
-        image: roxdb:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 50051
-        env:
-        - name: ROXDB_DB_PATH
-          value: "/data/roxdb"
-        volumeMounts:
-        - name: roxdb-storage
-          mountPath: /data/roxdb
-        livenessProbe:
-          grpc:
-            port: 50051
-            service: com.github.lukaszbudnik.roxdb.v1.RoxDB
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-          successThreshold: 1
-        readinessProbe:
-          grpc:
-            port: 50051
-            service: com.github.lukaszbudnik.roxdb.v1.RoxDB
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-          successThreshold: 1
+        - name: roxdb
+          image: roxdb:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50051
+          env:
+            - name: ROXDB_DB_PATH
+              value: "/data/roxdb"
+            - name: ROXDB_TLS_CERTIFICATE_PATH
+              value: "/etc/certs/tls.crt"
+            - name: ROXDB_TLS_PRIVATE_KEY_PATH
+              value: "/etc/certs/tls.key"
+          volumeMounts:
+            - name: roxdb-storage
+              mountPath: /data/roxdb
+              readOnly: false
+            - name: auth-tls
+              mountPath: /etc/certs
+              readOnly: true
+          livenessProbe:
+            # grpc probe doesn't support TLS options (yet), see: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            # grpc:
+            #   port: 50051
+            #   service: com.github.lukaszbudnik.roxdb.v1.RoxDB
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            # grpc probe doesn't support TLS options (yet), see: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            # grpc:
+            #   port: 50051
+            #   service: com.github.lukaszbudnik.roxdb.v1.RoxDB
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
       volumes:
-      - name: roxdb-storage
-        persistentVolumeClaim:
-          claimName: roxdb-pvc
+        - name: roxdb-storage
+          persistentVolumeClaim:
+            claimName: roxdb-pvc
+        - name: auth-tls
+          secret:
+            secretName: auth-tls
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
 ---
 apiVersion: v1
 kind: Service
@@ -65,8 +87,8 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 50051
-    targetPort: 50051
-    protocol: TCP
+    - port: 50051
+      targetPort: 50051
+      protocol: TCP
   selector:
     app: roxdb

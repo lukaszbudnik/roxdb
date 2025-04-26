@@ -1,11 +1,13 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
-import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
+import com.github.lukaszbudnik.roxdb.application.RoxDBConfig;
 import com.github.lukaszbudnik.roxdb.v1.RoxDBGrpc;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
+import com.google.common.base.Strings;
+import io.grpc.*;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -15,21 +17,46 @@ public class RoxDBServer {
   private static final Logger logger = LoggerFactory.getLogger(RoxDBServer.class);
 
   private final int port;
-  private final RoxDB roxDB;
+  private final RoxDBGrpcService roxDBGrpcService;
   private final Server server;
   private final HealthService healthService;
 
-  public RoxDBServer(int port, RoxDB roxDB) {
-    this.port = port;
-    this.roxDB = roxDB;
+  public RoxDBServer(RoxDBConfig config, RoxDBGrpcService roxDBGrpcService) throws IOException {
+    this.port = config.port();
+    this.roxDBGrpcService = roxDBGrpcService;
     this.healthService = new HealthService();
 
+    ServerCredentials serverCredentials = getServerCredentials(config);
+
     this.server =
-        ServerBuilder.forPort(port)
-            .addService(new RoxDBGrpcService(roxDB))
+        Grpc.newServerBuilderForPort(port, serverCredentials)
+            .addService(roxDBGrpcService)
             .addService(healthService)
             .addService(ProtoReflectionServiceV1.newInstance())
             .build();
+  }
+
+  private ServerCredentials getServerCredentials(RoxDBConfig config) throws IOException {
+    ServerCredentials serverCredentials;
+    if (!Strings.isNullOrEmpty(config.tlsCertificatePath())
+        && !Strings.isNullOrEmpty(config.tlsPrivateKeyPath())) {
+      TlsServerCredentials.Builder tlsBuilder =
+          TlsServerCredentials.newBuilder()
+              .keyManager(
+                  new File(config.tlsCertificatePath()), new File(config.tlsPrivateKeyPath()));
+      if (!Strings.isNullOrEmpty(config.tlsCertificateChainPath())) {
+        tlsBuilder.trustManager(new File(config.tlsCertificateChainPath()));
+        tlsBuilder.clientAuth(TlsServerCredentials.ClientAuth.REQUIRE);
+        logger.info("TLS mutual authentication enabled");
+      } else {
+        logger.info("TLS enabled");
+      }
+      serverCredentials = tlsBuilder.build();
+    } else {
+      serverCredentials = InsecureServerCredentials.create();
+      logger.warn("TLS disabled - server will run in plaintext");
+    }
+    return serverCredentials;
   }
 
   public void start() throws IOException {

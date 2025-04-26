@@ -19,10 +19,6 @@ public class HealthService extends HealthGrpc.HealthImplBase {
   public void check(
       HealthCheckRequest request, StreamObserver<HealthCheckResponse> responseObserver) {
     HealthCheckResponse.ServingStatus servingStatus = getServiceStatus(request.getService());
-    logger.debug(
-        "Returning health check for {} with service status: {}",
-        request.getService(),
-        servingStatus.name());
     responseObserver.onNext(HealthCheckResponse.newBuilder().setStatus(servingStatus).build());
     responseObserver.onCompleted();
   }

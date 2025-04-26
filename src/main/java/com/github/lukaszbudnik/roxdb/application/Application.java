@@ -1,11 +1,13 @@
 package com.github.lukaszbudnik.roxdb.application;
 
+import com.github.lukaszbudnik.roxdb.grpc.RoxDBGrpcService;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBServer;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+
 import org.rocksdb.RocksDBException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +15,13 @@ import org.slf4j.LoggerFactory;
 public class Application {
   public static final String ENV_PORT = "ROXDB_PORT";
   public static final String ENV_DB_PATH = "ROXDB_DB_PATH";
+  public static final String ENV_TLS_PRIVATE_KEY_PATH = "ROXDB_TLS_PRIVATE_KEY_PATH";
+  public static final String ENV_TLS_CERTIFICATE_PATH = "ROXDB_TLS_CERTIFICATE_PATH";
+  public static final String ENV_TLS_CERTIFICATE_CHAIN_PATH = "ROXDB_TLS_CERTIFICATE_CHAIN_PATH";
+
   public static final int DEFAULT_PORT = 50051;
   public static final String DEFAULT_DB_PATH = "/tmp/rocksdb";
+
   private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
   public static void main(String[] args) {
@@ -25,8 +32,8 @@ public class Application {
       RoxDBServer server = startServer(config, roxDB);
       setupShutdownHook(server, roxDB);
       server.blockUntilShutdown();
-    } catch (Exception e) {
-      logger.error("Failed to start RoxDB", e);
+    } catch (Throwable t) {
+      logger.error("Unexpected error", t);
       System.exit(1);
     }
   }
@@ -61,13 +68,46 @@ public class Application {
       logger.info("No database path specified in environment. Using default: {}", DEFAULT_DB_PATH);
     }
 
-    // Validate configuration
-    validateConfiguration(port, dbPath);
+    // Try to get TLS_CERTIFICATE_PATH from environment
+    String tlsCertificatePath = env.get(ENV_TLS_CERTIFICATE_PATH);
+    if (tlsCertificatePath != null && !tlsCertificatePath.isBlank()) {
+      logger.info("Using TLS certificate path from environment variable: {}", tlsCertificatePath);
+    } else {
+      logger.info("No TLS certificate path specified in environment.");
+    }
 
-    return new RoxDBConfig(port, dbPath);
+    // Try to get TLS_PRIVATE_KEY_PATH from environment
+    String tlsPrivateKeyPath = env.get(ENV_TLS_PRIVATE_KEY_PATH);
+    if (tlsPrivateKeyPath != null && !tlsPrivateKeyPath.isBlank()) {
+      logger.info("Using TLS private key path from environment variable: {}", tlsPrivateKeyPath);
+    } else {
+      logger.info("No TLS private key path specified in environment.");
+    }
+
+    // Try to get TLS_CERTIFICATE_CHAIN_PATH from environment
+    String tlsCertificateChainPath = env.get(ENV_TLS_CERTIFICATE_CHAIN_PATH);
+    if (tlsCertificateChainPath != null && !tlsCertificateChainPath.isBlank()) {
+      logger.info(
+          "Using TLS certificate chain path from environment variable: {}",
+          tlsCertificateChainPath);
+    } else {
+      logger.info("No TLS certificate chain path specified in environment.");
+    }
+
+    // Validate configuration
+    validateConfiguration(
+        port, dbPath, tlsCertificatePath, tlsPrivateKeyPath, tlsCertificateChainPath);
+
+    return new RoxDBConfig(
+        port, dbPath, tlsCertificatePath, tlsPrivateKeyPath, tlsCertificateChainPath);
   }
 
-  private static void validateConfiguration(int port, String dbPath) {
+  private static void validateConfiguration(
+      int port,
+      String dbPath,
+      String tlsCertificatePath,
+      String tlsPrivateKeyPath,
+      String tlsCertificateChainPath) {
     // Validate port
     if (port <= 0 || port > 65535) {
       logger.error("Invalid port number: {}. Port must be between 1 and 65535", port);
@@ -98,14 +138,73 @@ public class Application {
       logger.error("Database directory is not writable: {}", dbPath);
       throw new IllegalArgumentException("Database directory must be writable");
     }
+
+    // Validate if tlsCertificatePath is set, the file exists
+    boolean tlsCertificatePathSet = false;
+    if (tlsCertificatePath != null && !tlsCertificatePath.isBlank()) {
+      tlsCertificatePathSet = true;
+      File tlsCertificateFile = new File(tlsCertificatePath);
+      if (!tlsCertificateFile.exists() || !tlsCertificateFile.canRead()) {
+        logger.error(
+            "TLS certificate file does not exist or cannot be read: {}", tlsCertificatePath);
+        throw new IllegalArgumentException("TLS certificate file does not exist");
+      }
+    }
+
+    // Validate if tlsPrivateKeyPath is set, the file exists
+    boolean tlsPrivateKeyPathSet = false;
+    if (tlsPrivateKeyPath != null && !tlsPrivateKeyPath.isBlank()) {
+      tlsPrivateKeyPathSet = true;
+      File tlsPrivateKeyFile = new File(tlsPrivateKeyPath);
+      if (!tlsPrivateKeyFile.exists() || !tlsPrivateKeyFile.canRead()) {
+        logger.error(
+            "TLS private key file does not exist or cannot be read: {}", tlsPrivateKeyPath);
+        throw new IllegalArgumentException("TLS private key file does not exist");
+      }
+    }
+
+    // Validate tlsCertificateChainPath file exists
+    boolean tlsCertificateChainPathSet = false;
+    if (tlsCertificateChainPath != null && !tlsCertificateChainPath.isBlank()) {
+      tlsCertificateChainPathSet = true;
+      File tlsCertificateChainFile = new File(tlsCertificateChainPath);
+      if (!tlsCertificateChainFile.exists() || !tlsCertificateChainFile.canRead()) {
+        logger.error(
+            "TLS certificate chain file does not exist or cannot be read: {}",
+            tlsCertificateChainPath);
+        throw new IllegalArgumentException("TLS certificate chain file does not exist");
+      }
+    }
+
+    // in order for TLS to work both tlsCertificatePath and tlsPrivateKeyPath must be set
+    if ((tlsPrivateKeyPathSet && !tlsCertificatePathSet)
+        || (!tlsPrivateKeyPathSet && tlsCertificatePathSet)) {
+      logger.error(
+          "TLS certificate path and TLS private key path must be set or both empty. tlsCertificatePath set: {}, tlsPrivateKeyPath set: {}",
+          tlsCertificatePathSet,
+          tlsPrivateKeyPathSet);
+      throw new IllegalArgumentException(
+          "TLS certificate path and TLS private key path must be set or both empty");
+    }
+
+    // in order for TLS mutual authentication to work all tls variables must be set
+    if (tlsCertificateChainPathSet && (!tlsCertificatePathSet || !tlsPrivateKeyPathSet)) {
+      logger.error(
+          "TLS certificate chain path set but TLS certificate path or TLS private key path not set. tlsCertificatePath set: {}, tlsPrivateKeyPath set: {}, tlsCertificateChainPath set: {}",
+          tlsCertificatePathSet,
+          tlsPrivateKeyPathSet,
+          tlsCertificateChainPathSet);
+      throw new IllegalArgumentException(
+          "TLS certificate chain path set but TLS certificate path or TLS private key path not set");
+    }
   }
 
   private static RoxDB initializeDatabase(RoxDBConfig config) throws RocksDBException {
     return new RoxDBImpl(config.dbPath());
   }
 
-  private static RoxDBServer startServer(RoxDBConfig config, RoxDB roxDB) throws IOException {
-    RoxDBServer server = new RoxDBServer(config.port(), roxDB);
+  static RoxDBServer startServer(RoxDBConfig config, RoxDB roxDB) throws IOException {
+    RoxDBServer server = new RoxDBServer(config, new RoxDBGrpcService(roxDB));
     server.start();
     return server;
   }

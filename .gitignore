@@ -40,3 +40,7 @@ bin/
 
 ### Work in progress ###
 /wip/
+
+### Test Keys and Certs ###
+*.key
+*.crt

@@ -31,6 +31,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 * **DynamoDB-like API:** `PutItem`, `UpdateItem`, `DeleteItem`, `GetItem`, `Query`, `TransactWriteItems`.
 * **RocksDB Storage:** Utilizing RocksDB for fast and reliable data storage.
 * **gRPC Interface:** Providing a high-performance gRPC API for client interactions.
+* **Transport Security:** Support for TLS encryption and mutual TLS (mTLS) authentication for secure client-server
+  communication.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
 * **Containerization & Orchestration:** multi-arch (`linux/amd64` and `linux/arm64`) Docker container support for easy
   deployment, quick-start Kubernetes manifests provided
@@ -84,86 +86,121 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    docker run -P -e ROXDB_DB_PATH=/data/roxdb roxdb
    ```
 
-3. **Or deploy RoxDB service to Kubernetes:**
+    3. **Or deploy RoxDB service to Kubernetes:**
 
-   See [kubernetes/README.md](kubernetes/README.md).
+       See [kubernetes/README.md](kubernetes/README.md).
 
-4. **Test:**
+        4. **Test:**
 
-   Using [grpcurl](https://github.com/fullstorydev/grpcurl):
+           Using [grpcurl](https://github.com/fullstorydev/grpcurl):
 
-   ```bash
-   export ROXDB_ENDPOINT=localhost:50051
-   # Describe the service
-   grpcurl -plaintext ${ROXDB_ENDPOINT} describe com.github.lukaszbudnik.roxdb.v1.RoxDB
-   # Check service health
-   grpcurl -plaintext -d '{"service": "com.github.lukaszbudnik.roxdb.v1.RoxDB"}' ${ROXDB_ENDPOINT} grpc.health.v1.Health/Check
-   # Stream PutItem, UpdateItem, GetItem, DeleteItem, and one more GetItem in a single call
-   grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
-   {
-     "correlation_id": "123",
-     "table": "your-table-name",
-     "put_item": {
-       "item": {
-         "key": {
-           "partition_key": "part1",
-           "sort_key": "sort1"
-         },
-         "attributes": {
-           "field1": "value1",
-           "field2": 123
-         }
-       }
-     }
-   }
-   {
-     "correlation_id": "124",
-     "table": "your-table-name",
-     "update_item": {
-       "item": {
-         "key": {
-           "partition_key": "part1",
-           "sort_key": "sort1"
-         },
-         "attributes": {
-           "field1": "new value for field1",
-           "field3": "brand new field"
-         }
-       }
-     }
-   }
-   {
-     "correlation_id": "125",
-     "table": "your-table-name",
-     "get_item": {
-       "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
-       }
-     }
-   }
-   {
-     "correlation_id": "126",
-     "table": "your-table-name",
-     "delete_item": {
-       "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
-       }
-     }
-   }
-   {
-     "correlation_id": "127",
-     "table": "your-table-name",
-     "get_item": {
-       "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
-       }
-     }
-   }
-   EOM
-   ```
+           ```bash
+           export ROXDB_ENDPOINT=localhost:50051
+           # Describe the service
+           grpcurl -plaintext ${ROXDB_ENDPOINT} describe com.github.lukaszbudnik.roxdb.v1.RoxDB
+           # Check service health
+           grpcurl -plaintext -d '{"service": "com.github.lukaszbudnik.roxdb.v1.RoxDB"}' ${ROXDB_ENDPOINT} grpc.health.v1.Health/Check
+           # Stream PutItem, UpdateItem, GetItem, DeleteItem, and one more GetItem in a single call
+           grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
+           {
+             "correlation_id": "123",
+             "put_item": {
+               "table": "your-table-name",
+               "item": {
+                 "key": {
+                   "partition_key": "part1",
+                   "sort_key": "sort1"
+                 },
+                 "attributes": {
+                   "field1": "value1",
+                   "field2": 123
+                 }
+               }
+             }
+           }
+           {
+             "correlation_id": "124",
+             "update_item": {
+               "table": "your-table-name",
+               "item": {
+                 "key": {
+                   "partition_key": "part1",
+                   "sort_key": "sort1"
+                 },
+                 "attributes": {
+                   "field1": "new value for field1",
+                   "field3": "brand new field"
+                 }
+               }
+             }
+           }
+           {
+             "correlation_id": "125",
+             "get_item": {
+               "table": "your-table-name",
+               "key": {
+                 "partition_key": "part1",
+                 "sort_key": "sort1"
+               }
+             }
+           }
+           {
+             "correlation_id": "126",
+             "delete_item": {
+               "table": "your-table-name",
+               "key": {
+                 "partition_key": "part1",
+                 "sort_key": "sort1"
+               }
+             }
+           }
+           {
+             "correlation_id": "127",
+             "get_item": {
+               "table": "your-table-name",
+               "key": {
+                 "partition_key": "part1",
+                 "sort_key": "sort1"
+               }
+             }
+           }
+           {
+             "correlation_id": "txn-123",
+             "transact_write_items": {
+               "items": [
+                 {
+                   "put": {
+                     "table": "accounts",
+                     "item": {
+                     "key": {
+                       "partition_key": "user#1",
+                       "sort_key": "account"
+                     },
+                     "attributes": {
+                       "value": 30
+                     }
+                   }
+                  }
+                 },
+                 {
+                   "put": {
+                     "table": "accounts",
+                     "item": {
+                       "key": {
+                         "partition_key": "user#2",
+                         "sort_key": "account"
+                       },
+                       "attributes": {
+                         "value": 70
+                       }
+                     }
+                   }
+                 }
+               ]
+             }
+           }
+           EOM
+           ```
 
 ## Contributing
 

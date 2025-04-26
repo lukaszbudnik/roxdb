@@ -31,6 +31,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 * **DynamoDB-like API:** `PutItem`, `UpdateItem`, `DeleteItem`, `GetItem`, `Query`, `TransactWriteItems`.
 * **RocksDB Storage:** Utilizing RocksDB for fast and reliable data storage.
 * **gRPC Interface:** Providing a high-performance gRPC API for client interactions.
+* **Transport Security:** Support for TLS encryption and mutual TLS (mTLS) authentication for secure client-server
+  communication.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
 * **Containerization & Orchestration:** multi-arch (`linux/amd64` and `linux/arm64`) Docker container support for easy
   deployment, quick-start Kubernetes manifests provided
@@ -102,8 +104,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
    {
      "correlation_id": "123",
-     "table": "your-table-name",
      "put_item": {
+       "table": "your-table-name",
        "item": {
          "key": {
            "partition_key": "part1",
@@ -118,8 +120,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    }
    {
      "correlation_id": "124",
-     "table": "your-table-name",
      "update_item": {
+       "table": "your-table-name",
        "item": {
          "key": {
            "partition_key": "part1",
@@ -134,8 +136,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    }
    {
      "correlation_id": "125",
-     "table": "your-table-name",
      "get_item": {
+       "table": "your-table-name",
        "key": {
          "partition_key": "part1",
          "sort_key": "sort1"
@@ -144,8 +146,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    }
    {
      "correlation_id": "126",
-     "table": "your-table-name",
      "delete_item": {
+       "table": "your-table-name",
        "key": {
          "partition_key": "part1",
          "sort_key": "sort1"
@@ -154,12 +156,47 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    }
    {
      "correlation_id": "127",
-     "table": "your-table-name",
      "get_item": {
+       "table": "your-table-name",
        "key": {
          "partition_key": "part1",
          "sort_key": "sort1"
        }
+     }
+   }
+   {
+     "correlation_id": "txn-123",
+     "transact_write_items": {
+       "items": [
+         {
+           "put": {
+             "table": "accounts",
+             "item": {
+             "key": {
+               "partition_key": "user#1",
+               "sort_key": "account"
+             },
+             "attributes": {
+               "value": 30
+             }
+           }
+          }
+         },
+         {
+           "put": {
+             "table": "accounts",
+             "item": {
+               "key": {
+                 "partition_key": "user#2",
+                 "sort_key": "account"
+               },
+               "attributes": {
+                 "value": 70
+               }
+             }
+           }
+         }
+       ]
      }
    }
    EOM

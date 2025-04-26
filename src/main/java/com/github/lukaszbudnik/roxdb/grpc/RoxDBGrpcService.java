@@ -47,7 +47,6 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
             executeOperation(itemRequest, responseBuilder);
           }
           responseObserver.onNext(responseBuilder.build());
-          onCompleted();
         } catch (Throwable t) {
           Status status = Status.INTERNAL.withDescription("Internal server error").withCause(t);
           Metadata metadata = new Metadata();

@@ -40,6 +40,7 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.grpc.inprocess)
     testImplementation(libs.mockito.junit)
+    testImplementation(libs.bouncycastle.bcprov)
 
     mockitoAgent(libs.mockito.core) { isTransitive = false }
 }

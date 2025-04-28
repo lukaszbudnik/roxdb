@@ -16,10 +16,7 @@ public interface RoxDB extends AutoCloseable {
   Item getItem(String tableName, Key key) throws RocksDBException;
 
   List<Item> query(
-      String tableName,
-      String partitionKey,
-      Optional<String> sortKeyStart,
-      Optional<String> sortKeyEnd)
+      String tableName, String partitionKey, int limit, Optional<SortKeyRange> sortKeyRange)
       throws RocksDBException;
 
   void deleteItem(String tableName, Key key) throws RocksDBException;

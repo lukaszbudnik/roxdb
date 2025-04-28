@@ -94,8 +94,34 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
   }
 
   private List<ValidationResult> validateQueryKeys(ItemRequest.Query query) {
-    Key startKey = new Key(query.getPartitionKey(), query.getSortKeyStart());
-    Key endKey = new Key(query.getPartitionKey(), query.getSortKeyEnd());
+    // When set SortKeyRange must have at least one boundary
+    if (query.hasSortKeyRange()
+        && !query.getSortKeyRange().hasStart()
+        && !query.getSortKeyRange().hasEnd()) {
+      return List.of(
+          new ValidationResult(false, "When set SortKeyRange must have at least one boundary"));
+    }
+
+    String sortKeyStart = null;
+    if (query.hasSortKeyRange() && query.getSortKeyRange().hasStart()) {
+      sortKeyStart = query.getSortKeyRange().getStart().getValue();
+    }
+    String sortKeyEnd = null;
+    if (query.hasSortKeyRange() && query.getSortKeyRange().hasEnd()) {
+      sortKeyEnd = query.getSortKeyRange().getEnd().getValue();
+    }
+
+    // query allows empty sort keys so make them non-empty as the default validation will raise
+    // errors
+    if (sortKeyStart == null) {
+      sortKeyStart = " ";
+    }
+    if (sortKeyEnd == null) {
+      sortKeyEnd = " ";
+    }
+
+    Key startKey = new Key(query.getPartitionKey(), sortKeyStart);
+    Key endKey = new Key(query.getPartitionKey(), sortKeyEnd);
 
     List<ValidationResult> startKeyValidationResult = KeyValidator.isValid(startKey);
     List<ValidationResult> endKeyValidationResult = KeyValidator.isValid(endKey);
@@ -200,12 +226,13 @@ public class RoxDBGrpcService extends RoxDBGrpc.RoxDBImplBase {
   private void query(ItemRequest.Query query, ItemResponse.Builder responseBuilder)
       throws RocksDBException {
     String tableName = query.getTable();
-    var items =
-        roxDB.query(
-            tableName,
-            query.getPartitionKey(),
-            Optional.of(query.getSortKeyStart()),
-            Optional.of(query.getSortKeyEnd()));
+    Optional<SortKeyRange> sortKeyRange = Optional.empty();
+    if (query.hasSortKeyRange()) {
+      SortKeyRange modelSortKeyRange = ProtoUtils.protoToModel(query.getSortKeyRange());
+      sortKeyRange = Optional.of(modelSortKeyRange);
+    }
+    int limit = query.getLimit();
+    var items = roxDB.query(tableName, query.getPartitionKey(), limit, sortKeyRange);
     var itemsQueryResultBuilder = ItemResponse.QueryResponse.ItemsQueryResult.newBuilder();
     for (var item : items) {
       var protoItem = ProtoUtils.modelToProto(item);

@@ -147,40 +147,63 @@ public class RoxDBImpl implements RoxDB {
   // Query operation
   @Override
   public List<Item> query(
-      String tableName,
-      String partitionKey,
-      Optional<String> sortKeyStart,
-      Optional<String> sortKeyEnd)
+      String tableName, String partitionKey, int limit, Optional<SortKeyRange> sortKeyRange)
       throws RocksDBException {
     List<Item> results = new ArrayList<>();
     ColumnFamilyHandle cfHandle = getOrCreateColumnFamily(tableName);
 
+    Optional<RangeBoundary> startSortKey = Optional.empty();
+    if (sortKeyRange.isPresent()) {
+      startSortKey = sortKeyRange.get().start();
+    }
+
+    Optional<RangeBoundary> endSortKey = Optional.empty();
+    if (sortKeyRange.isPresent()) {
+      endSortKey = sortKeyRange.get().end();
+    }
+
     // Create RocksDB iterator
     try (RocksIterator iterator = db.newIterator(cfHandle)) {
-      // Seek to the first potential match
-      String seekKey = partitionKey + PARTITION_SORT_KEY_SEPARATOR;
+      // Determine the starting point
+      String partitionPrefix = partitionKey + PARTITION_SORT_KEY_SEPARATOR;
+      String seekKey = partitionPrefix;
+
+      if (sortKeyRange.isPresent() && sortKeyRange.get().start().isPresent()) {
+        seekKey += sortKeyRange.get().start().get().value();
+      }
+
       iterator.seek(seekKey.getBytes());
 
+      // we move to the next record if start key range type is set to exclusive
+      if (startSortKey.isPresent() && startSortKey.get().type() == RangeType.EXCLUSIVE) {
+        iterator.next();
+      }
+
       // Iterate through matching items
-      while (iterator.isValid()) {
+      while (iterator.isValid() && results.size() < limit) {
         String currentKey = new String(iterator.key());
 
         // Check if we're still in the same partition
-        if (!currentKey.startsWith(seekKey)) {
+        if (!currentKey.startsWith(partitionPrefix)) {
           break;
         }
 
         String currentSortKey = currentKey.split(String.valueOf(PARTITION_SORT_KEY_SEPARATOR))[1];
 
-        // Apply sort key range conditions if specified
-        if (sortKeyStart.isPresent() && currentSortKey.compareTo(sortKeyStart.get()) < 0) {
-          iterator.next();
-          continue;
-        }
-
-        if (sortKeyEnd.isPresent() && currentSortKey.compareTo(sortKeyEnd.get()) > 0) {
+        // Apply sort key range end condition if specified
+        if (endSortKey.isPresent() && currentSortKey.compareTo(endSortKey.get().value()) > 0) {
           break;
         }
+        // edge case for exact key match for exclusive end sort key
+        if (endSortKey.isPresent()
+            && endSortKey.get().type() == RangeType.EXCLUSIVE
+            && currentSortKey.compareTo(endSortKey.get().value()) == 0) {
+          break;
+        }
+
+        //        if (sortKeyEnd.isPresent() && currentSortKey.compareTo(sortKeyEnd.get()) > 0) {
+        //          break;
+        //        }
 
         // Add matching item to results
         Map<String, Object> attributes = SerDeUtils.deserializeAttributes(iterator.value());
@@ -192,11 +215,11 @@ public class RoxDBImpl implements RoxDB {
     }
 
     logger.debug(
-        "QueryResults for: {}{}{}-{} found items: {}",
+        "QueryResults for: {}{}{} limit {} found items: {}",
         partitionKey,
         PARTITION_SORT_KEY_SEPARATOR,
-        sortKeyStart,
-        sortKeyEnd,
+        sortKeyRange,
+        limit,
         results.size());
 
     return results;

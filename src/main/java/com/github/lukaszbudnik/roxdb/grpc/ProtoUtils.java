@@ -1,6 +1,10 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
+import com.github.lukaszbudnik.roxdb.rocksdb.RangeBoundary;
+import com.github.lukaszbudnik.roxdb.rocksdb.RangeType;
+import com.github.lukaszbudnik.roxdb.rocksdb.SortKeyRange;
 import com.github.lukaszbudnik.roxdb.v1.Item;
+import com.github.lukaszbudnik.roxdb.v1.ItemRequest;
 import com.github.lukaszbudnik.roxdb.v1.Key;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
@@ -89,5 +93,39 @@ public class ProtoUtils {
 
   public static com.github.lukaszbudnik.roxdb.rocksdb.Key protoToModel(Key key) {
     return new com.github.lukaszbudnik.roxdb.rocksdb.Key(key.getPartitionKey(), key.getSortKey());
+  }
+
+  public static SortKeyRange protoToModel(ItemRequest.SortKeyRange sortKeyRange) {
+    RangeBoundary start = null;
+    if (sortKeyRange.hasStart()) {
+      start =
+          new RangeBoundary(
+              sortKeyRange.getStart().getValue(), protoToModel(sortKeyRange.getStart().getType()));
+    }
+    RangeBoundary end = null;
+    if (sortKeyRange.hasEnd()) {
+      end =
+          new RangeBoundary(
+              sortKeyRange.getEnd().getValue(), protoToModel(sortKeyRange.getEnd().getType()));
+    }
+
+    if (start == null && end == null) {
+      throw new IllegalArgumentException("When set SortKeyRange must have at least one boundary");
+    }
+    if (start == null) {
+      return SortKeyRange.to(end);
+    }
+    if (end == null) {
+      return SortKeyRange.from(start);
+    }
+    return SortKeyRange.between(start, end);
+  }
+
+  public static RangeType protoToModel(ItemRequest.RangeType type) {
+    return switch (type) {
+      case EXCLUSIVE -> RangeType.EXCLUSIVE;
+      case INCLUSIVE -> RangeType.INCLUSIVE;
+      default -> throw new IllegalArgumentException("Unsupported range type: " + type);
+    };
   }
 }

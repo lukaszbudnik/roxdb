@@ -6,10 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
-import com.github.lukaszbudnik.roxdb.rocksdb.TransactionContext;
-import com.github.lukaszbudnik.roxdb.rocksdb.TransactionOperations;
+import com.github.lukaszbudnik.roxdb.rocksdb.*;
 import com.github.lukaszbudnik.roxdb.v1.*;
+import com.github.lukaszbudnik.roxdb.v1.Item;
+import com.github.lukaszbudnik.roxdb.v1.Key;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.grpc.*;
@@ -441,11 +441,13 @@ class RoxDBGrpcServiceTest {
     CountDownLatch latch = new CountDownLatch(1);
 
     // setup RoxDB.query mock to return 3 items
-    when(roxDB.query(
-            eq(table),
-            eq(partitionKey),
-            eq(Optional.of(sortKeyPrefix + "0")),
-            eq(Optional.of(sortKeyPrefix + "2"))))
+    Optional<SortKeyRange> sortKeyRange =
+        Optional.of(
+            SortKeyRange.between(
+                RangeBoundary.inclusive(sortKeyPrefix + "0"),
+                RangeBoundary.inclusive(sortKeyPrefix + "2")));
+
+    when(roxDB.query(eq(table), eq(partitionKey), eq(10), eq(sortKeyRange)))
         .thenReturn(
             List.of(
                 new com.github.lukaszbudnik.roxdb.rocksdb.Item(
@@ -491,8 +493,20 @@ class RoxDBGrpcServiceTest {
         ItemRequest.Query.newBuilder()
             .setTable(table)
             .setPartitionKey(partitionKey)
-            .setSortKeyStart(sortKeyStart)
-            .setSortKeyEnd(sortKeyEnd)
+            .setLimit(10)
+            .setSortKeyRange(
+                ItemRequest.SortKeyRange.newBuilder()
+                    .setStart(
+                        ItemRequest.RangeBoundary.newBuilder()
+                            .setType(ItemRequest.RangeType.INCLUSIVE)
+                            .setValue(sortKeyStart)
+                            .build())
+                    .setEnd(
+                        ItemRequest.RangeBoundary.newBuilder()
+                            .setType(ItemRequest.RangeType.INCLUSIVE)
+                            .setValue(sortKeyEnd)
+                            .build())
+                    .build())
             .build();
 
     ItemRequest request =
@@ -506,12 +520,7 @@ class RoxDBGrpcServiceTest {
 
     assertTrue(latch.await(1, TimeUnit.SECONDS));
 
-    verify(roxDB)
-        .query(
-            eq(table),
-            eq(partitionKey),
-            eq(Optional.of(sortKeyStart)),
-            eq(Optional.of(sortKeyEnd)));
+    verify(roxDB).query(eq(table), eq(partitionKey), eq(10), eq(sortKeyRange));
 
     // Verify query response
     ItemResponse queryResponse = responses.get(queryId.toString());
@@ -864,71 +873,6 @@ class RoxDBGrpcServiceTest {
   }
 
   @Test
-  void queryWithValidationErrors() throws RocksDBException, InterruptedException {
-    UUID queryId = UUID.randomUUID();
-    String table = "table";
-    String partitionKey = "";
-    String sortKey = "";
-    Map<String, Object> attributes = new HashMap<>();
-    attributes.put("field1", "value1");
-    attributes.put("field2", 123.0);
-    attributes.put("field3", true);
-
-    CountDownLatch latch = new CountDownLatch(1);
-    Map<String, ItemResponse> responses = new HashMap<>();
-
-    ItemRequest queryRequest =
-        ItemRequest.newBuilder()
-            .setCorrelationId(queryId.toString())
-            .setQuery(
-                ItemRequest.Query.newBuilder()
-                    .setTable(table)
-                    .setPartitionKey(partitionKey)
-                    .setSortKeyStart(sortKey)
-                    .setSortKeyEnd(sortKey + PARTITION_SORT_KEY_SEPARATOR)
-                    .build())
-            .build();
-
-    var responseObserver =
-        new StreamObserver<ItemResponse>() {
-          @Override
-          public void onNext(ItemResponse itemResponse) {
-            responses.put(itemResponse.getCorrelationId(), itemResponse);
-            latch.countDown();
-          }
-
-          @Override
-          public void onError(Throwable throwable) {
-            fail("onError should not be called");
-          }
-
-          @Override
-          public void onCompleted() {
-            // no-op
-          }
-        };
-
-    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
-    requestObserver.onNext(queryRequest);
-    requestObserver.onCompleted();
-
-    assertTrue(latch.await(1, TimeUnit.SECONDS));
-
-    // verify gRPC response contains Errors message
-    ItemResponse queryResponse = responses.get(queryId.toString());
-    assertTrue(queryResponse.hasErrors(), "Expected to get errors for " + queryId);
-    assertEquals(queryId.toString(), queryResponse.getCorrelationId());
-    assertEquals(
-        3, queryResponse.getErrors().getErrorCount(), "Expected to get 2 errors for " + queryId);
-    assertEquals(
-        "Partition key cannot be blank", queryResponse.getErrors().getError(0).getMessage());
-    assertEquals("Sort key cannot be blank", queryResponse.getErrors().getError(1).getMessage());
-    assertEquals(
-        "Sort key cannot contain character U+001F",
-        queryResponse.getErrors().getError(2).getMessage());
-  }
-
-  @Test
   void transactWriteItemsWithValidationErrors() throws InterruptedException {
     // Create test data
     UUID transactWriteItemsId = UUID.randomUUID();
@@ -1041,5 +985,133 @@ class RoxDBGrpcServiceTest {
     assertEquals(
         "Sort key cannot be blank",
         transactWriteItemsResponse.getErrors().getError(5).getMessage());
+  }
+
+  @Test
+  void queryWithValidationErrors() throws RocksDBException, InterruptedException {
+    UUID queryId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "";
+    String sortKey = "";
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    ItemRequest queryRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(queryId.toString())
+            .setQuery(
+                ItemRequest.Query.newBuilder()
+                    .setTable(table)
+                    .setPartitionKey(partitionKey)
+                    .setLimit(10)
+                    .setSortKeyRange(
+                        ItemRequest.SortKeyRange.newBuilder()
+                            .setStart(
+                                ItemRequest.RangeBoundary.newBuilder()
+                                    .setType(ItemRequest.RangeType.INCLUSIVE)
+                                    .setValue(sortKey)
+                                    .build())
+                            .setEnd(
+                                ItemRequest.RangeBoundary.newBuilder()
+                                    .setType(ItemRequest.RangeType.INCLUSIVE)
+                                    .setValue(sortKey + PARTITION_SORT_KEY_SEPARATOR)
+                                    .build())
+                            .build())
+                    .build())
+            .build();
+
+    var responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(queryRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify gRPC response contains Errors message
+    ItemResponse queryResponse = responses.get(queryId.toString());
+    assertTrue(queryResponse.hasErrors(), "Expected to get errors for " + queryId);
+    assertEquals(queryId.toString(), queryResponse.getCorrelationId());
+    assertEquals(3, queryResponse.getErrors().getErrorCount());
+    assertEquals(
+        "Partition key cannot be blank", queryResponse.getErrors().getError(0).getMessage());
+    assertEquals("Sort key cannot be blank", queryResponse.getErrors().getError(1).getMessage());
+    assertEquals(
+        "Sort key cannot contain character U+001F",
+        queryResponse.getErrors().getError(2).getMessage());
+  }
+
+  @Test
+  void queryWithSortKeyRangeEmpty() throws RocksDBException, InterruptedException {
+    UUID queryId = UUID.randomUUID();
+    String table = "table";
+    String partitionKey = "";
+
+    CountDownLatch latch = new CountDownLatch(1);
+    Map<String, ItemResponse> responses = new HashMap<>();
+
+    ItemRequest queryRequest =
+        ItemRequest.newBuilder()
+            .setCorrelationId(queryId.toString())
+            .setQuery(
+                ItemRequest.Query.newBuilder()
+                    .setTable(table)
+                    .setPartitionKey(partitionKey)
+                    .setLimit(10)
+                    .setSortKeyRange(ItemRequest.SortKeyRange.newBuilder().build())
+                    .build())
+            .build();
+
+    var responseObserver =
+        new StreamObserver<ItemResponse>() {
+          @Override
+          public void onNext(ItemResponse itemResponse) {
+            responses.put(itemResponse.getCorrelationId(), itemResponse);
+            latch.countDown();
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should not be called");
+          }
+
+          @Override
+          public void onCompleted() {
+            // no-op
+          }
+        };
+
+    StreamObserver<ItemRequest> requestObserver = asyncStub.processItems(responseObserver);
+    requestObserver.onNext(queryRequest);
+    requestObserver.onCompleted();
+
+    assertTrue(latch.await(1, TimeUnit.SECONDS));
+
+    // verify gRPC response contains Errors message
+    ItemResponse queryResponse = responses.get(queryId.toString());
+    assertTrue(queryResponse.hasErrors(), "Expected to get errors for " + queryId);
+    assertEquals(queryId.toString(), queryResponse.getCorrelationId());
+    assertEquals(1, queryResponse.getErrors().getErrorCount());
+    assertEquals(
+        "When set SortKeyRange must have at least one boundary",
+        queryResponse.getErrors().getError(0).getMessage());
   }
 }

@@ -53,8 +53,23 @@ message ItemRequest {
   message Query {
     string table = 1;
     string partition_key = 2;
-    optional string sort_key_start = 3;
-    optional string sort_key_end = 4;
+    int32 limit = 3;
+    optional SortKeyRange sort_key_range = 4;
+  }
+
+  enum RangeType {
+    INCLUSIVE = 0;
+    EXCLUSIVE = 1;
+  }
+
+  message RangeBoundary {
+    string value = 1;
+    RangeType type = 2;
+  }
+
+  message SortKeyRange {
+    optional RangeBoundary start = 1;
+    optional RangeBoundary end = 2;
   }
 
   message TransactWriteItems {

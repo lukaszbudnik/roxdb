@@ -1,45 +1,30 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
-import java.io.File;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.rocksdb.RocksDBException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class RoxDBImplTest {
 
-  private static final Logger log = LoggerFactory.getLogger(RoxDBImplTest.class);
-  private String dbPath = null;
-  private RoxDBImpl roxdb = null;
+  @TempDir Path dbPath = null;
+  RoxDBImpl roxdb = null;
 
   @BeforeEach
   void setUp() throws RocksDBException {
-    // Clean up the database before each test
-    dbPath = "/tmp/roxdb-test-" + System.currentTimeMillis();
-    roxdb = new RoxDBImpl(dbPath);
+    roxdb = new RoxDBImpl(dbPath.toString());
   }
 
   @AfterEach
   void tearDown() {
-    //        System.out.println("=== Database-wide Metrics ===");
-    //        System.out.println(roxdb.getDatabaseMetrics());
-    //        System.out.println();
-    //
-    //        System.out.println("=== Column Family Metrics: users ===");
-    //        System.out.println(roxdb.getColumnFamilyMetrics("users"));
-    //        System.out.println();
-
-    // destroy the database after each test
     roxdb.close();
-    FileUtils.deleteQuietly(new File(dbPath));
   }
 
   @Test
@@ -115,51 +100,228 @@ class RoxDBImplTest {
     Item addressItem = new Item(addressKey, address);
     roxdb.putItem("users", addressItem);
 
+    Map<String, Object> settings = new HashMap<>();
+    settings.put("theme", "dark");
+    Key settingsKey = new Key("user123", "settings");
+    Item settingsItem = new Item(settingsKey, settings);
+    roxdb.putItem("users", settingsItem);
+
     Map<String, Object> profileUser2 = new HashMap<>();
     profileUser2.put("message", "");
     Key profileUser2Key = new Key("user124", "profile");
     Item otherUserItem = new Item(profileUser2Key, profileUser2);
     roxdb.putItem("users", otherUserItem);
 
-    // Query items
+    // Query all items
     List<Item> queryResults =
         roxdb.query(
             "users", // table name
             "user123", // partition key
-            Optional.empty(), // sort key start
-            Optional.empty() // sort key end
+            10, // limit
+            Optional.empty() // empty sort key range
             );
-    Assertions.assertEquals(3, queryResults.size());
+    Assertions.assertEquals(4, queryResults.size());
     // keys are sorted so first is address, payment, then profile
     Assertions.assertEquals(addressItem, queryResults.get(0));
     Assertions.assertEquals(paymentItem, queryResults.get(1));
     Assertions.assertEquals(profileItem, queryResults.get(2));
+    Assertions.assertEquals(settingsItem, queryResults.get(3));
 
-    // Query items using sort key start p
-    // this will include payment and profile
-    // and will exclude address
+    // Query items using sort key start from "p" inclusive
+    // for sort key start the inclusive option behaves like startsWith
+    // this will include payment, profile, and settings and will exclude address
     List<Item> queryResultsPrefixP =
         roxdb.query(
             "users", // table name
             "user123", // partition key
-            Optional.of("p"), // sort key start
-            Optional.empty() // sort key end
-            );
-    Assertions.assertEquals(2, queryResultsPrefixP.size());
+            10, // limit
+            Optional.of(SortKeyRange.from(RangeBoundary.inclusive("p"))));
+    Assertions.assertEquals(3, queryResultsPrefixP.size());
     Assertions.assertEquals(paymentItem, queryResultsPrefixP.get(0));
     Assertions.assertEquals(profileItem, queryResultsPrefixP.get(1));
+    Assertions.assertEquals(settingsItem, queryResultsPrefixP.get(2));
 
-    // Query items using sort key start a and sort key end b
-    // this will include only address
-    List<Item> queryResultsPrefixAB =
+    // Query items using sort key start up to "pro"
+    // for sort key end the inclusive option behaves like a full match
+    // this will include address and payment, but will exclude "profile"
+    List<Item> queryResultsPrefixUpToPro =
         roxdb.query(
             "users", // table name
             "user123", // partition key
-            Optional.of("a"), // sort key start
-            Optional.of("b") // sort key end
+            10, // limit
+            Optional.of(SortKeyRange.to(RangeBoundary.inclusive("pro"))));
+    Assertions.assertEquals(2, queryResultsPrefixUpToPro.size());
+    Assertions.assertEquals(addressItem, queryResultsPrefixUpToPro.get(0));
+    Assertions.assertEquals(paymentItem, queryResultsPrefixUpToPro.get(1));
+
+    // Query items using sort key start between "a" and "s"
+    // for sort key start the inclusive option behaves like startsWith
+    // for sort key end the inclusive option behaves like a full match
+    // this will include address, payment, profile, but will exclude "settings"
+    List<Item> queryResultsPrefixAtoS =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.between(RangeBoundary.inclusive("a"), RangeBoundary.inclusive("s"))));
+    Assertions.assertEquals(3, queryResultsPrefixAtoS.size());
+    Assertions.assertEquals(addressItem, queryResultsPrefixAtoS.get(0));
+    Assertions.assertEquals(paymentItem, queryResultsPrefixAtoS.get(1));
+    Assertions.assertEquals(profileItem, queryResultsPrefixAtoS.get(2));
+  }
+
+  @Test
+  void queryPagination() throws RocksDBException {
+    for (int i = 0; i < 100; i++) {
+      Map<String, Object> profile = new HashMap<>();
+      profile.put("message", "Hello World");
+      // pad profile number with leading zeros so that they are sorted correctly by RocksDB (RocksDB
+      // sorts keys lexicographically) e.g. profile01, profile02, profile03, etc.
+      Key profileKey = new Key("user123", String.format("profile%02d", i));
+      Item profileItem = new Item(profileKey, profile);
+      roxdb.putItem("users", profileItem);
+    }
+
+    // first call
+    List<Item> queryResults =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.empty() // empty sort key range
             );
-    Assertions.assertEquals(1, queryResultsPrefixAB.size());
-    Assertions.assertEquals(addressItem, queryResultsPrefixAB.get(0));
+    Assertions.assertEquals(10, queryResults.size());
+    for (int i = 0; i < 10; i++) {
+      Assertions.assertEquals(String.format("profile%02d", i), queryResults.get(i).key().sortKey());
+    }
+
+    // next call
+    String lastEvaluatedKey = queryResults.get(9).key().sortKey();
+    List<Item> queryResultsNext =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.from(RangeBoundary.exclusive(lastEvaluatedKey))) // exclusive start key
+            );
+    Assertions.assertEquals(10, queryResultsNext.size());
+    for (int i = 0; i < 10; i++) {
+      Assertions.assertEquals("profile" + (i + 10), queryResultsNext.get(i).key().sortKey());
+    }
+  }
+
+  @Test
+  void queryBetweenInclusiveInclusive() throws RocksDBException {
+    for (int i = 0; i < 10; i++) {
+      Map<String, Object> profile = new HashMap<>();
+      profile.put("message", "Hello World");
+      // pad profile number with leading zeros so that they are sorted correctly by RocksDB (RocksDB
+      // sorts keys lexicographically) e.g. profile01, profile02, profile03, etc.
+      Key profileKey = new Key("user123", String.format("profile%02d", i));
+      Item profileItem = new Item(profileKey, profile);
+      roxdb.putItem("users", profileItem);
+    }
+
+    // first call
+    List<Item> queryResults =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.between(
+                    RangeBoundary.inclusive("profile02"), RangeBoundary.inclusive("profile07"))));
+    Assertions.assertEquals(6, queryResults.size());
+    for (int i = 2; i <= 7; i++) {
+      Assertions.assertEquals(
+          String.format("profile%02d", i), queryResults.get(i - 2).key().sortKey());
+    }
+  }
+
+  @Test
+  void queryBetweenInclusiveExclusive() throws RocksDBException {
+    for (int i = 0; i < 10; i++) {
+      Map<String, Object> profile = new HashMap<>();
+      profile.put("message", "Hello World");
+      // pad profile number with leading zeros so that they are sorted correctly by RocksDB (RocksDB
+      // sorts keys lexicographically) e.g. profile01, profile02, profile03, etc.
+      Key profileKey = new Key("user123", String.format("profile%02d", i));
+      Item profileItem = new Item(profileKey, profile);
+      roxdb.putItem("users", profileItem);
+    }
+
+    // first call
+    List<Item> queryResults =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.between(
+                    RangeBoundary.inclusive("profile02"), RangeBoundary.exclusive("profile07"))));
+    Assertions.assertEquals(5, queryResults.size());
+    for (int i = 2; i < 7; i++) {
+      Assertions.assertEquals(
+          String.format("profile%02d", i), queryResults.get(i - 2).key().sortKey());
+    }
+  }
+
+  @Test
+  void queryBetweenExclusiveInclusive() throws RocksDBException {
+    for (int i = 0; i < 10; i++) {
+      Map<String, Object> profile = new HashMap<>();
+      profile.put("message", "Hello World");
+      // pad profile number with leading zeros so that they are sorted correctly by RocksDB (RocksDB
+      // sorts keys lexicographically) e.g. profile01, profile02, profile03, etc.
+      Key profileKey = new Key("user123", String.format("profile%02d", i));
+      Item profileItem = new Item(profileKey, profile);
+      roxdb.putItem("users", profileItem);
+    }
+
+    // first call
+    List<Item> queryResults =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.between(
+                    RangeBoundary.exclusive("profile02"), RangeBoundary.inclusive("profile07"))));
+    Assertions.assertEquals(5, queryResults.size());
+    for (int i = 2 + 1; i <= 7; i++) {
+      Assertions.assertEquals(
+          String.format("profile%02d", i), queryResults.get(i - 3).key().sortKey());
+    }
+  }
+
+  @Test
+  void queryBetweenExclusiveExclusive() throws RocksDBException {
+    for (int i = 0; i < 10; i++) {
+      Map<String, Object> profile = new HashMap<>();
+      profile.put("message", "Hello World");
+      // pad profile number with leading zeros so that they are sorted correctly by RocksDB (RocksDB
+      // sorts keys lexicographically) e.g. profile01, profile02, profile03, etc.
+      Key profileKey = new Key("user123", String.format("profile%02d", i));
+      Item profileItem = new Item(profileKey, profile);
+      roxdb.putItem("users", profileItem);
+    }
+
+    // first call
+    List<Item> queryResults =
+        roxdb.query(
+            "users", // table name
+            "user123", // partition key
+            10, // limit
+            Optional.of(
+                SortKeyRange.between(
+                    RangeBoundary.exclusive("profile02"), RangeBoundary.exclusive("profile07"))));
+    Assertions.assertEquals(4, queryResults.size());
+    for (int i = 2 + 1; i < 7; i++) {
+      Assertions.assertEquals(
+          String.format("profile%02d", i), queryResults.get(i - 3).key().sortKey());
+    }
   }
 
   @Test

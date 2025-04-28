@@ -105,11 +105,11 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    {
      "correlation_id": "123",
      "put_item": {
-       "table": "your-table-name",
+       "table": "users",
        "item": {
          "key": {
-           "partition_key": "part1",
-           "sort_key": "sort1"
+           "partition_key": "user#123",
+           "sort_key": "settings"
          },
          "attributes": {
            "field1": "value1",
@@ -119,13 +119,29 @@ using AI-powered code generation tools like Amazon Q to streamline development.
      }
    }
    {
-     "correlation_id": "124",
-     "update_item": {
-       "table": "your-table-name",
+     "correlation_id": "123",
+     "put_item": {
+       "table": "users",
        "item": {
          "key": {
-           "partition_key": "part1",
-           "sort_key": "sort1"
+           "partition_key": "user#123",
+           "sort_key": "address"
+         },
+         "attributes": {
+           "country": "Poland",
+           "city": "Wejherowo"
+         }
+       }
+     }
+   }
+   {
+     "correlation_id": "124",
+     "update_item": {
+       "table": "users",
+       "item": {
+         "key": {
+           "partition_key": "user#123",
+           "sort_key": "settings"
          },
          "attributes": {
            "field1": "new value for field1",
@@ -137,30 +153,66 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    {
      "correlation_id": "125",
      "get_item": {
-       "table": "your-table-name",
+       "table": "users",
        "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
+         "partition_key": "user#123",
+         "sort_key": "settings"
+       }
+     }
+   }
+   {
+     "correlation_id": "query-with-no-sort-key-range-1",
+     "query": {
+       "table": "users",
+       "partition_key": "user#123",
+       "limit": 10
+     }
+   }
+   {
+     "correlation_id": "query-with-sort-key-and-boundaries-1",
+     "query": {
+       "table": "users",
+       "partition_key": "user#123",
+       "limit": 10,
+       "sort_key_range": {
+         "start": {
+           "value": "address",
+           "type": "INCLUSIVE"
+         },
+         "end": {
+           "value": "settings",
+           "type": "EXCLUSIVE"
+         }
        }
      }
    }
    {
      "correlation_id": "126",
      "delete_item": {
-       "table": "your-table-name",
+       "table": "users",
        "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
+         "partition_key": "user#123",
+         "sort_key": "settings"
        }
      }
    }
    {
      "correlation_id": "127",
-     "get_item": {
-       "table": "your-table-name",
+     "delete_item": {
+       "table": "users",
        "key": {
-         "partition_key": "part1",
-         "sort_key": "sort1"
+         "partition_key": "user#123",
+         "sort_key": "address"
+       }
+     }
+   }
+   {
+     "correlation_id": "128",
+     "get_item": {
+       "table": "users",
+       "key": {
+         "partition_key": "user#123",
+         "sort_key": "settings"
        }
      }
    }

@@ -1,6 +1,9 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
+import com.github.lukaszbudnik.roxdb.rocksdb.RangeType;
+import com.github.lukaszbudnik.roxdb.rocksdb.SortKeyRange;
 import com.github.lukaszbudnik.roxdb.v1.Item;
+import com.github.lukaszbudnik.roxdb.v1.ItemRequest;
 import com.github.lukaszbudnik.roxdb.v1.Key;
 import com.google.protobuf.Struct;
 import org.junit.jupiter.api.Test;
@@ -137,5 +140,93 @@ class ProtoUtilsTest {
 
     // Verify
     assertEquals(originalMap, resultMap);
+  }
+
+  @Test
+  public void testProtoToModelSortKeyRangeBetween() {
+    // Create a range with both start and end boundaries
+    ItemRequest.RangeBoundary startBoundary =
+        ItemRequest.RangeBoundary.newBuilder()
+            .setValue("start123")
+            .setType(ItemRequest.RangeType.INCLUSIVE)
+            .build();
+
+    ItemRequest.RangeBoundary endBoundary =
+        ItemRequest.RangeBoundary.newBuilder()
+            .setValue("end456")
+            .setType(ItemRequest.RangeType.EXCLUSIVE)
+            .build();
+
+    ItemRequest.SortKeyRange protoRange =
+        ItemRequest.SortKeyRange.newBuilder().setStart(startBoundary).setEnd(endBoundary).build();
+
+    SortKeyRange modelRange = ProtoUtils.protoToModel(protoRange);
+
+    assertNotNull(modelRange);
+    assertEquals("start123", modelRange.start().get().value());
+    assertEquals(RangeType.INCLUSIVE, modelRange.start().get().type());
+    assertEquals("end456", modelRange.end().get().value());
+    assertEquals(RangeType.EXCLUSIVE, modelRange.end().get().type());
+  }
+
+  @Test
+  public void testProtoToModelSortKeyRangeFrom() {
+    // Create a range with only start boundary
+    ItemRequest.RangeBoundary startBoundary =
+        ItemRequest.RangeBoundary.newBuilder()
+            .setValue("start123")
+            .setType(ItemRequest.RangeType.INCLUSIVE)
+            .build();
+
+    ItemRequest.SortKeyRange protoRange =
+        ItemRequest.SortKeyRange.newBuilder().setStart(startBoundary).build();
+
+    SortKeyRange modelRange = ProtoUtils.protoToModel(protoRange);
+
+    assertNotNull(modelRange);
+    assertEquals("start123", modelRange.start().get().value());
+    assertEquals(RangeType.INCLUSIVE, modelRange.start().get().type());
+    assertTrue(modelRange.end().isEmpty());
+  }
+
+  @Test
+  public void testProtoToModelSortKeyRangeTo() {
+    // Create a range with only end boundary
+    ItemRequest.RangeBoundary endBoundary =
+        ItemRequest.RangeBoundary.newBuilder()
+            .setValue("end456")
+            .setType(ItemRequest.RangeType.EXCLUSIVE)
+            .build();
+
+    ItemRequest.SortKeyRange protoRange =
+        ItemRequest.SortKeyRange.newBuilder().setEnd(endBoundary).build();
+
+    SortKeyRange modelRange = ProtoUtils.protoToModel(protoRange);
+
+    assertNotNull(modelRange);
+    assertTrue(modelRange.start().isEmpty());
+    assertEquals("end456", modelRange.end().get().value());
+    assertEquals(RangeType.EXCLUSIVE, modelRange.end().get().type());
+  }
+
+  @Test
+  public void testProtoToModelSortKeyRangeWithNoBoundaries() {
+    ItemRequest.SortKeyRange protoRange = ItemRequest.SortKeyRange.newBuilder().build();
+    assertThrows(IllegalArgumentException.class, () -> ProtoUtils.protoToModel(protoRange));
+  }
+
+  @Test
+  public void testProtoToModelRangeType() {
+    assertEquals(RangeType.EXCLUSIVE, ProtoUtils.protoToModel(ItemRequest.RangeType.EXCLUSIVE));
+    assertEquals(RangeType.INCLUSIVE, ProtoUtils.protoToModel(ItemRequest.RangeType.INCLUSIVE));
+  }
+
+  @Test
+  public void testProtoToModelRangeTypeWithUnsupportedType() {
+    // Assuming there are other enum values in ItemRequest.RangeType
+    // that are not supported by the conversion
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> ProtoUtils.protoToModel(ItemRequest.RangeType.UNRECOGNIZED));
   }
 }

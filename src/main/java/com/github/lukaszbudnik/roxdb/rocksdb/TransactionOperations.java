@@ -4,5 +4,5 @@ import org.rocksdb.RocksDBException;
 
 @FunctionalInterface
 public interface TransactionOperations {
-    void doInTransaction(TransactionContext transactionContext) throws RocksDBException;
+  void doInTransaction(TransactionContext transactionContext) throws RocksDBException;
 }

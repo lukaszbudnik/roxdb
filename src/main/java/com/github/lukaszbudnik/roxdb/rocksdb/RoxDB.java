@@ -2,7 +2,6 @@ package com.github.lukaszbudnik.roxdb.rocksdb;
 
 import java.util.List;
 import java.util.Optional;
-
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
 

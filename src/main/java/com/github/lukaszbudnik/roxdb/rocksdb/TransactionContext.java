@@ -1,12 +1,11 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Transaction;
 import org.slf4j.Logger;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class TransactionContext {
   private final Logger logger = org.slf4j.LoggerFactory.getLogger(TransactionContext.class);

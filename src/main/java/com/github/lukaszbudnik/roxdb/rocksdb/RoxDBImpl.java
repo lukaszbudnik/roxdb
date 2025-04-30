@@ -2,14 +2,13 @@ package com.github.lukaszbudnik.roxdb.rocksdb;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-
 import org.rocksdb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RoxDBImpl implements RoxDB {
-  private static final Logger logger = LoggerFactory.getLogger(RoxDBImpl.class);
   public static final char PARTITION_SORT_KEY_SEPARATOR = '\u001F';
+  private static final Logger logger = LoggerFactory.getLogger(RoxDBImpl.class);
 
   static {
     RocksDB.loadLibrary();

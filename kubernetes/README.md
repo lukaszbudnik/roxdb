@@ -18,10 +18,14 @@ Create RoxDB deployment and service with TLS enabled using self-signed certifica
 cd kubernetes
 # Generate Private Key and Self-Signed Certificate
 openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:4096 -keyout private.key -out certificate.crt -subj "/C=PL/CN=roxdb.localhost/O=roxdb"
+
 # create the secret TLS
-kubectl create secret tls auth-tls --key private.key --cert certificate.crt
-# create the deployment and the service
+kubectl create secret tls tls-auth --key private.key --cert certificate.crt
+# create persistent volume claim
+kubectl apply -f roxdb-pvc.yaml
+# create the stateful set and the service
 kubectl apply -f roxdb-deployment.yaml
+
 # check pods
 kubectl get pods
 # check services
@@ -41,8 +45,10 @@ minikube service roxdb --url
 When using gRPC client remember to disable certificate validation (we used the self-signed certification) or when using
 grpcurl use the `-insecure` flag.
 
-Delete the deployment and service:
+Delete the stateful set, service, persistent volume claim, and the secret:
 
 ```bash
 kubectl delete -f roxdb-deployment.yaml
+kubectl delete -f roxdb-pvc.yaml
+kubectl delete secret tls-auth
 ```

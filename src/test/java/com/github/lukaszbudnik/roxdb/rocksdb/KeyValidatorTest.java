@@ -1,11 +1,10 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
-import org.junit.jupiter.api.Test;
-
 import static com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl.PARTITION_SORT_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 class KeyValidatorTest {
 

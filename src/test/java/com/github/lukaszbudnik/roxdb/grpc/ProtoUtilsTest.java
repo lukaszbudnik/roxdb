@@ -1,17 +1,16 @@
 package com.github.lukaszbudnik.roxdb.grpc;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.github.lukaszbudnik.roxdb.rocksdb.RangeType;
 import com.github.lukaszbudnik.roxdb.rocksdb.SortKeyRange;
 import com.github.lukaszbudnik.roxdb.v1.Item;
 import com.github.lukaszbudnik.roxdb.v1.ItemRequest;
 import com.github.lukaszbudnik.roxdb.v1.Key;
 import com.google.protobuf.Struct;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
-
 import java.util.*;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 class ProtoUtilsTest {
 

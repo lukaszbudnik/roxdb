@@ -6,7 +6,6 @@ import com.google.common.base.Strings;
 import io.grpc.*;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -90,13 +89,13 @@ public class RoxDBServer {
     server.awaitTermination();
   }
 
-  public void setServiceStatus(ServingStatus servingStatus) {
-    String service = RoxDBGrpc.getServiceDescriptor().getName();
-    healthService.setServiceStatus(service, servingStatus);
-  }
-
   public ServingStatus getServiceStatus() {
     String service = RoxDBGrpc.getServiceDescriptor().getName();
     return healthService.getServiceStatus(service);
+  }
+
+  public void setServiceStatus(ServingStatus servingStatus) {
+    String service = RoxDBGrpc.getServiceDescriptor().getName();
+    healthService.setServiceStatus(service, servingStatus);
   }
 }

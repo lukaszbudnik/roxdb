@@ -1,11 +1,9 @@
 package com.github.lukaszbudnik.roxdb.rocksdb;
 
-import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.HexFormat;
-import java.util.List;
-
 import static com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl.PARTITION_SORT_KEY_SEPARATOR;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class KeyValidator {
   public static List<ValidationResult> isValid(Key key) {

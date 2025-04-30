@@ -3,13 +3,12 @@ package com.github.lukaszbudnik.roxdb.rocksdb;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.slf4j.Logger;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
 
 public class SerDeUtils {
   private static final Kryo kryo;

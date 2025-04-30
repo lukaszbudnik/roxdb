@@ -100,7 +100,7 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    grpcurl -plaintext ${ROXDB_ENDPOINT} describe com.github.lukaszbudnik.roxdb.v1.RoxDB
    # Check service health
    grpcurl -plaintext -d '{"service": "com.github.lukaszbudnik.roxdb.v1.RoxDB"}' ${ROXDB_ENDPOINT} grpc.health.v1.Health/Check
-   # Stream PutItem, UpdateItem, GetItem, DeleteItem, and one more GetItem in a single call
+   # Stream PutItem, UpdateItem, GetItem, DeleteItem, Query, and TransactWriteItems in a single call
    grpcurl -d @ -plaintext ${ROXDB_ENDPOINT} com.github.lukaszbudnik.roxdb.v1.RoxDB/ProcessItems << EOM
    {
      "correlation_id": "123",

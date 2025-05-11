@@ -2,6 +2,7 @@ package com.github.lukaszbudnik.roxdb.application;
 
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBServer;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
+import io.opentelemetry.sdk.metrics.export.MetricExporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,10 +11,12 @@ public class ShutdownManager {
   private final Thread shutdownHook;
   private final RoxDBServer server;
   private final RoxDB roxDB;
+  private final MetricExporter metricExporter;
 
-  public ShutdownManager(RoxDBServer server, RoxDB roxDB) {
+  public ShutdownManager(RoxDBServer server, RoxDB roxDB, MetricExporter metricExporter) {
     this.server = server;
     this.roxDB = roxDB;
+    this.metricExporter = metricExporter;
     this.shutdownHook = createShutdownHook();
   }
 
@@ -33,6 +36,14 @@ public class ShutdownManager {
       roxDB.close();
     } catch (Exception e) {
       logger.error("Error closing RocksDB instance", e);
+    }
+
+    if (metricExporter != null) {
+      try {
+        metricExporter.shutdown();
+      } catch (Exception e) {
+        logger.error("Error closing metric exporter", e);
+      }
     }
   }
 

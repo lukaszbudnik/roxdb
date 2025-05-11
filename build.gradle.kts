@@ -35,12 +35,16 @@ dependencies {
     implementation(libs.slf4j.api)
     implementation(libs.logback.classic)
 
+    implementation(libs.bundles.opentelemetry)
+    implementation(libs.jackson.dataformat.yaml)
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.grpc.inprocess)
     testImplementation(libs.mockito.junit)
     testImplementation(libs.bouncycastle.bcprov)
+    testImplementation(libs.opentelemetry.sdk.testing)
 
     mockitoAgent(libs.mockito.core) { isTransitive = false }
 }

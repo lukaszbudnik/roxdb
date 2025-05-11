@@ -4,8 +4,11 @@ import java.util.List;
 import java.util.Optional;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.Statistics;
 
 public interface RoxDB extends AutoCloseable {
+  Statistics getStatistics();
+
   ColumnFamilyHandle getOrCreateColumnFamily(String tableName) throws RocksDBException;
 
   void putItem(String tableName, Item item) throws RocksDBException;

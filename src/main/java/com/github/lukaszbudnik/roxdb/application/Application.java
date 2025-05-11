@@ -2,8 +2,12 @@ package com.github.lukaszbudnik.roxdb.application;
 
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBGrpcService;
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBServer;
+import com.github.lukaszbudnik.roxdb.metrics.*;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDBImpl;
+import com.google.common.base.Strings;
+import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.sdk.metrics.export.MetricExporter;
 import java.io.IOException;
 import java.util.Map;
 import org.rocksdb.RocksDBException;
@@ -39,7 +43,21 @@ public class Application {
   void startApplication() throws RocksDBException, IOException {
     RoxDB roxDB = new RoxDBImpl(config.dbPath());
     this.server = new RoxDBServer(config, new RoxDBGrpcService(roxDB));
-    ShutdownManager shutdownManager = new ShutdownManager(server, roxDB);
+    MetricExporter metricExporter = null;
+    if (!Strings.isNullOrEmpty(config.openTelemetryConfig())) {
+      MetricsConfigReader metricsConfigReader = new MetricsConfigReader();
+      MetricsConfig metricsConfig = metricsConfigReader.readConfig(config.openTelemetryConfig());
+      OtlpMetricsExporterFactory metricsExporterFactory =
+          new OtlpMetricsExporterFactory(metricsConfig);
+      metricExporter = metricsExporterFactory.createMetricExporter();
+      Meter meter = metricsExporterFactory.createMeter();
+      RocksDBMetricsCollector metricsCollector =
+          new RocksDBMetricsCollector(roxDB.getStatistics(), meter);
+      MetricsConfigProcessor metricsConfigProcessor = new MetricsConfigProcessor(metricsConfig);
+      metricsCollector.createTickerTypeMetrics(metricsConfigProcessor.getTickerTypes());
+      metricsCollector.createHistogramTypeMetrics(metricsConfigProcessor.getHistogramTypes());
+    }
+    ShutdownManager shutdownManager = new ShutdownManager(server, roxDB, metricExporter);
     server.start();
     shutdownManager.register();
   }

@@ -10,6 +10,8 @@ logback = "1.5.18"
 junit = "5.12.2"
 mockito = "5.17.0"
 bouncycastle = "1.80"
+opentelemetry = "1.32.0"
+jackson = "2.19.0"
 
 [libraries]
 rocksdb = { group = "org.rocksdb", name = "rocksdbjni", version.ref = "rocksdb" }
@@ -38,3 +40,19 @@ mockito-junit = { group = "org.mockito", name = "mockito-junit-jupiter", version
 mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
 
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+
+opentelemetry-api = { group = "io.opentelemetry", name = "opentelemetry-api", version.ref = "opentelemetry" }
+opentelemetry-sdk = { group = "io.opentelemetry", name = "opentelemetry-sdk", version.ref = "opentelemetry" }
+opentelemetry-sdk-metrics = { group = "io.opentelemetry", name = "opentelemetry-sdk-metrics", version.ref = "opentelemetry" }
+opentelemetry-exporter-otlp = { group = "io.opentelemetry", name = "opentelemetry-exporter-otlp", version.ref = "opentelemetry" }
+opentelemetry-sdk-testing = { group = "io.opentelemetry", name = "opentelemetry-sdk-testing", version.ref = "opentelemetry" }
+
+jackson-dataformat-yaml = { group = "com.fasterxml.jackson.dataformat", name = "jackson-dataformat-yaml", version.ref = "jackson" }
+
+[bundles]
+opentelemetry = [
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-sdk-metrics",
+    "opentelemetry-exporter-otlp"
+]

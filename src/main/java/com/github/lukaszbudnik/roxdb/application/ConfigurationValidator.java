@@ -10,6 +10,7 @@ public class ConfigurationValidator {
   public void validateConfiguration(RoxDBConfig config) {
     validatePort(config.port());
     validateDbPath(config.dbPath());
+    validateFile(config.openTelemetryConfig(), "OpenTelemetry config");
     validateTLSConfiguration(
         config.tlsCertificatePath(), config.tlsPrivateKeyPath(), config.tlsCertificateChainPath());
   }
@@ -55,15 +56,15 @@ public class ConfigurationValidator {
   void validateTLSConfiguration(
       String tlsCertificatePath, String tlsPrivateKeyPath, String tlsCertificateChainPath) {
 
-    boolean tlsCertificatePathSet = validateTLSFile(tlsCertificatePath, "TLS certificate");
-    boolean tlsPrivateKeyPathSet = validateTLSFile(tlsPrivateKeyPath, "TLS private key");
+    boolean tlsCertificatePathSet = validateFile(tlsCertificatePath, "TLS certificate");
+    boolean tlsPrivateKeyPathSet = validateFile(tlsPrivateKeyPath, "TLS private key");
     boolean tlsCertificateChainPathSet =
-        validateTLSFile(tlsCertificateChainPath, "TLS certificate chain");
+        validateFile(tlsCertificateChainPath, "TLS certificate chain");
 
     validateTLSCombination(tlsCertificatePathSet, tlsPrivateKeyPathSet, tlsCertificateChainPathSet);
   }
 
-  private boolean validateTLSFile(String filePath, String fileType) {
+  private boolean validateFile(String filePath, String fileType) {
     if (filePath == null || filePath.isBlank()) {
       return false;
     }

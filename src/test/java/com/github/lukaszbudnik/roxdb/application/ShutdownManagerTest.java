@@ -4,6 +4,7 @@ import static org.mockito.Mockito.*;
 
 import com.github.lukaszbudnik.roxdb.grpc.RoxDBServer;
 import com.github.lukaszbudnik.roxdb.rocksdb.RoxDB;
+import io.opentelemetry.sdk.metrics.export.MetricExporter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,11 +18,13 @@ public class ShutdownManagerTest {
 
   @Mock private RoxDB mockRoxDB;
 
+  @Mock private MetricExporter metricExporter;
+
   private ShutdownManager shutdownManager;
 
   @BeforeEach
   public void setUp() {
-    shutdownManager = new ShutdownManager(mockServer, mockRoxDB);
+    shutdownManager = new ShutdownManager(mockServer, mockRoxDB, metricExporter);
   }
 
   @Test
@@ -72,7 +75,7 @@ public class ShutdownManagerTest {
 
     // Create a custom ShutdownManager that uses the mocked Runtime
     ShutdownManager manager =
-        new ShutdownManager(mockServer, mockRoxDB) {
+        new ShutdownManager(mockServer, mockRoxDB, metricExporter) {
           @Override
           public void register() {
             runtime.addShutdownHook(new Thread(this::performShutdown));

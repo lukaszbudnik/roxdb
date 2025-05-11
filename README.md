@@ -36,6 +36,8 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 * **Efficient Data Serialization:** Leveraging gRPC's Protocol Buffers for efficient data serialization.
 * **Containerization & Orchestration:** multi-arch (`linux/amd64` and `linux/arm64`) Docker container support for easy
   deployment, quick-start Kubernetes manifests provided
+* **Observability with OpenTelemetry:** Built-in OpenTelemetry integration for monitoring RocksDB metrics and
+  operational insights.
 
 ## Getting Started
 
@@ -253,6 +255,65 @@ using AI-powered code generation tools like Amazon Q to streamline development.
    }
    EOM
    ```
+
+## Configuration
+
+RoxDB can be configured using the following environment variables:
+
+| Environment Variable               | Description                                                                                   | Required |
+|------------------------------------|-----------------------------------------------------------------------------------------------|----------|
+| `ROXDB_PORT`                       | The port number on which the gRPC server listens for incoming connections.                    | Yes      |
+| `ROXDB_DB_PATH`                    | File system path where RocksDB will store its data files.                                     | Yes      |
+| `ROXDB_TLS_PRIVATE_KEY_PATH`       | Path to the TLS private key file for secure communications. Required when TLS is enabled.     | No*      |
+| `ROXDB_TLS_CERTIFICATE_PATH`       | Path to the TLS certificate file. Required when TLS is enabled.                               | No*      |
+| `ROXDB_TLS_CERTIFICATE_CHAIN_PATH` | Path to the certificate chain file for TLS validation. Required when using mutual TLS (mTLS). | No**     |
+| `ROXDB_OPENTELEMETRY_CONFIG`       | Path to OpenTelemetry configuration file for metrics collection and export.                   | No       |
+
+\* `ROXDB_TLS_PRIVATE_KEY_PATH` and `ROXDB_TLS_CERTIFICATE_PATH` variables are required when running with TLS enabled.
+
+\*\* `ROXDB_TLS_CERTIFICATE_CHAIN_PATH` is only required when running mutual authentication using mTLS.
+
+### Example Configuration
+
+```bash
+# Basic setup
+export ROXDB_PORT=8080
+export ROXDB_DB_PATH=/data/roxdb
+
+# TLS configuration
+export ROXDB_TLS_PRIVATE_KEY_PATH=/etc/roxdb/tls/private.key
+export ROXDB_TLS_CERTIFICATE_PATH=/etc/roxdb/tls/certificate.crt
+export ROXDB_TLS_CERTIFICATE_CHAIN_PATH=/etc/roxdb/tls/chain.crt
+
+# Observability
+export ROXDB_OPENTELEMETRY_CONFIG=/etc/roxdb/otel-config.yaml
+```
+
+When `ROXDB_OPENTELEMETRY_CONFIG` is set, it must point to a valid yaml file:
+
+```yaml
+# gRPC OTLP endpoint for sending metrics
+otlpEndpoint: http://localhost:4317
+# interval at which collect metrics, in seconds
+interval: 1
+# list of org.rocksdb.TickerType or "*" for all tickers (beware RocksDB has 200+ tickers)
+tickers:
+  - "NUMBER_KEYS_WRITTEN"
+  - "NUMBER_KEYS_READ"
+  - "BYTES_WRITTEN"
+  - "BYTES_READ"
+  - "NO_FILE_OPENS"
+  - "NO_FILE_ERRORS"
+  - "STALL_MICROS"
+# list of org.rocksdb.HistogramType or "*" for all histograms (beware RocksDB has 60+ histograms)
+histograms:
+  - "DB_GET"
+  - "DB_WRITE"
+  - "COMPACTION_TIME"
+  - "COMPACTION_CPU_TIME"
+  - "WAL_FILE_SYNC_MICROS"
+  - "MANIFEST_FILE_SYNC_MICROS"
+```
 
 ## Contributing
 

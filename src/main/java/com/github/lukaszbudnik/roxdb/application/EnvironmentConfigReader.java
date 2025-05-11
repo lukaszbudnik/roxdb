@@ -10,6 +10,7 @@ public class EnvironmentConfigReader {
   public static final String ENV_TLS_PRIVATE_KEY_PATH = "ROXDB_TLS_PRIVATE_KEY_PATH";
   public static final String ENV_TLS_CERTIFICATE_PATH = "ROXDB_TLS_CERTIFICATE_PATH";
   public static final String ENV_TLS_CERTIFICATE_CHAIN_PATH = "ROXDB_TLS_CERTIFICATE_CHAIN_PATH";
+  public static final String ENV_OPENTELEMETRY_CONFIG = "ROXDB_OPENTELEMETRY_CONFIG";
 
   public static final int DEFAULT_PORT = 50051;
   public static final String DEFAULT_DB_PATH = "/tmp/rocksdb";
@@ -72,7 +73,20 @@ public class EnvironmentConfigReader {
       logger.info("No TLS certificate chain path specified in environment.");
     }
 
+    // Try to get OTLP_ENDPOINT from environment
+    String openTelemetryConfig = env.get(ENV_OPENTELEMETRY_CONFIG);
+    if (openTelemetryConfig != null && !openTelemetryConfig.isBlank()) {
+      logger.info("Using OpenTelemetry config from environment variable: {}", openTelemetryConfig);
+    } else {
+      logger.info("No OpenTelemetry config specified in environment. OpenTelemetry is disabled.");
+    }
+
     return new RoxDBConfig(
-        port, dbPath, tlsCertificatePath, tlsPrivateKeyPath, tlsCertificateChainPath);
+        port,
+        dbPath,
+        tlsCertificatePath,
+        tlsPrivateKeyPath,
+        tlsCertificateChainPath,
+        openTelemetryConfig);
   }
 }

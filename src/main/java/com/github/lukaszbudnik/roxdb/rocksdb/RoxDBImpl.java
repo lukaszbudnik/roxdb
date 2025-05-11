@@ -20,6 +20,7 @@ public class RoxDBImpl implements RoxDB {
   private final DBOptions dbOptions;
   private final TransactionDBOptions transactionDbOptions;
   private final List<ColumnFamilyHandle> columnFamilyHandles;
+  private final Statistics statistics;
 
   public RoxDBImpl(String dbPath) throws RocksDBException {
     logger.info("Initializing RocksDB instance at {}", dbPath);
@@ -30,7 +31,7 @@ public class RoxDBImpl implements RoxDB {
     this.columnFamilies = new HashMap<>();
     this.columnFamilyHandles = new ArrayList<>();
 
-    Statistics statistics = new Statistics();
+    this.statistics = new Statistics();
     // Create DB options
     this.dbOptions =
         new DBOptions()
@@ -67,6 +68,11 @@ public class RoxDBImpl implements RoxDB {
     }
 
     logger.info("RocksDB instance initialized");
+  }
+
+  @Override
+  public Statistics getStatistics() {
+    return statistics;
   }
 
   @Override
@@ -258,10 +264,14 @@ public class RoxDBImpl implements RoxDB {
     for (ColumnFamilyHandle handle : columnFamilyHandles) {
       handle.close();
     }
-    // Close the database
-    db.close();
     // Close DB options
     dbOptions.close();
+    // Close transaction DB options
+    transactionDbOptions.close();
+    // Close statistics
+    statistics.close();
+    // Close the database
+    db.close();
     logger.info("RocksDB instance closed successfully");
   }
 }

@@ -5,4 +5,5 @@ public record RoxDBConfig(
     String dbPath,
     String tlsCertificatePath,
     String tlsPrivateKeyPath,
-    String tlsCertificateChainPath) {}
+    String tlsCertificateChainPath,
+    String openTelemetryConfig) {}

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: roxdb
-          image: roxdb:latest
+          image: ghcr.io/lukaszbudnik/roxdb:edge
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 50051
@@ -25,12 +25,17 @@ spec:
               value: "/etc/certs/tls.crt"
             - name: ROXDB_TLS_PRIVATE_KEY_PATH
               value: "/etc/certs/tls.key"
+            - name: ROXDB_OPENTELEMETRY_CONFIG
+              value: "/etc/metrics/metrics-config.yaml"
           volumeMounts:
             - name: roxdb-storage
               mountPath: /data/roxdb
               readOnly: false
             - name: tls-auth
               mountPath: /etc/certs
+              readOnly: true
+            - name: roxdb-metrics-config
+              mountPath: /etc/metrics
               readOnly: true
           livenessProbe:
             # grpc probe doesn't support TLS options (yet), see: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
@@ -68,13 +73,15 @@ spec:
                 path: tls.crt
               - key: tls.key
                 path: tls.key
+        - name: roxdb-metrics-config
+          configMap:
+            name: roxdb-metrics-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: roxdb
 spec:
-  type: NodePort
   ports:
     - port: 50051
       targetPort: 50051

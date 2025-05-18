@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: roxdb-metrics-config
+data:
+  metrics-config.yaml: |
+    # gRPC OTLP endpoint for sending metrics
+    otlpEndpoint: http://otel-collector:4317
+    # interval at which collect metrics, in seconds
+    interval: 10
+    # list of org.rocksdb.TickerType or "*" for all tickers (beware RocksDB has 200+ tickers)
+    tickers:
+      - "NUMBER_KEYS_WRITTEN"
+      - "NUMBER_KEYS_READ"
+      - "BYTES_WRITTEN"
+      - "BYTES_READ"
+      - "NO_FILE_OPENS"
+      - "NO_FILE_ERRORS"
+      - "STALL_MICROS"
+    # list of org.rocksdb.HistogramType or "*" for all histograms (beware RocksDB has 60+ histograms)
+    histograms:
+      - "DB_GET"
+      - "DB_WRITE"
+      - "COMPACTION_TIME"
+      - "COMPACTION_CPU_TIME"
+      - "WAL_FILE_SYNC_MICROS"
+      - "MANIFEST_FILE_SYNC_MICROS"
+

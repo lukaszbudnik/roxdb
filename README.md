@@ -41,54 +41,16 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 
 ## Getting Started
 
-### Prerequisites
-
-* Java 21 or later
-* Gradle
-* Protocol Buffer Compiler (`protoc`)
-
-### Installation
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone git@github.com:lukaszbudnik/roxdb.git
-   cd roxdb
-   ```
-
-2. **Build the project:**
-
-   ```bash
-   ./gradlew build
-   ```
-
 ### Running the Server
 
-1. **Start the RoxDB Java app:**
+1. **Pull and start the Docker container:**
 
    ```bash
-   # Run with defaults
-   java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
-   # Run with custom port
-   ROXDB_PORT=50052 java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
-   # Run with custom db path
-   ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
-   # Run with both custom port and db path
-   ROXDB_PORT=50052 ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+   docker pull ghcr.io/lukaszbudnik/roxdb:edge
+   docker run -d -p 50051:50051 ghcr.io/lukaszbudnik/roxdb:edge
    ```
 
-2. **Or build and start the RoxDB container:**
-
-   ```bash
-   # Build the Docker image and pass ROXDB_VERSION build argument
-   docker build --build-arg ROXDB_VERSION=1.0-SNAPSHOT -t roxdb .
-   # Run with default db path
-   docker run -P roxdb
-   # Run with custom db path/volume
-   docker run -P -e ROXDB_DB_PATH=/data/roxdb roxdb
-   ```
-
-3. **Or deploy RoxDB service to Kubernetes:**
+2. **Or deploy RoxDB service to Kubernetes:**
 
    See [kubernetes/README.md](kubernetes/README.md).
 
@@ -260,14 +222,14 @@ using AI-powered code generation tools like Amazon Q to streamline development.
 
 RoxDB can be configured using the following environment variables:
 
-| Environment Variable               | Description                                                                                   | Required |
-|------------------------------------|-----------------------------------------------------------------------------------------------|----------|
-| `ROXDB_PORT`                       | The port number on which the gRPC server listens for incoming connections.                    | Yes      |
-| `ROXDB_DB_PATH`                    | File system path where RocksDB will store its data files.                                     | Yes      |
-| `ROXDB_TLS_PRIVATE_KEY_PATH`       | Path to the TLS private key file for secure communications. Required when TLS is enabled.     | No*      |
-| `ROXDB_TLS_CERTIFICATE_PATH`       | Path to the TLS certificate file. Required when TLS is enabled.                               | No*      |
-| `ROXDB_TLS_CERTIFICATE_CHAIN_PATH` | Path to the certificate chain file for TLS validation. Required when using mutual TLS (mTLS). | No**     |
-| `ROXDB_OPENTELEMETRY_CONFIG`       | Path to OpenTelemetry configuration file for metrics collection and export.                   | No       |
+| Environment Variable               | Description                                                                                   | Required | Default      |
+|------------------------------------|-----------------------------------------------------------------------------------------------|----------|--------------|
+| `ROXDB_PORT`                       | The port number on which the gRPC server listens for incoming connections.                    | No       | 50501        |
+| `ROXDB_DB_PATH`                    | File system path where RocksDB will store its data files.                                     | No       | /tmp/rocksdb |
+| `ROXDB_TLS_PRIVATE_KEY_PATH`       | Path to the TLS private key file for secure communications. Required when TLS is enabled.     | No*      |              |
+| `ROXDB_TLS_CERTIFICATE_PATH`       | Path to the TLS certificate file. Required when TLS is enabled.                               | No*      |              |
+| `ROXDB_TLS_CERTIFICATE_CHAIN_PATH` | Path to the certificate chain file for TLS validation. Required when using mutual TLS (mTLS). | No**     |              |
+| `ROXDB_OPENTELEMETRY_CONFIG`       | Path to OpenTelemetry configuration file for metrics collection and export.                   | No       |              |
 
 \* `ROXDB_TLS_PRIVATE_KEY_PATH` and `ROXDB_TLS_CERTIFICATE_PATH` variables are required when running with TLS enabled.
 
@@ -314,6 +276,54 @@ histograms:
   - "WAL_FILE_SYNC_MICROS"
   - "MANIFEST_FILE_SYNC_MICROS"
 ```
+
+## Building the project locally
+
+### Prerequisites
+
+* Java 21 or later
+* Gradle
+* Protocol Buffer Compiler (`protoc`)
+* Docker engine
+
+### Installation
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone git@github.com:lukaszbudnik/roxdb.git
+   cd roxdb
+   ```
+
+2. **Build the project:**
+
+   ```bash
+   ./gradlew build
+   ```
+
+3. **Start the RoxDB Java app:**
+
+   ```bash
+   # Run with defaults
+   java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+   # Run with custom port
+   ROXDB_PORT=50052 java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+   # Run with custom db path
+   ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+   # Run with both custom port and db path
+   ROXDB_PORT=50052 ROXDB_DB_PATH=/data/roxdb java -jar build/libs/roxdb-1.0-SNAPSHOT-all.jar
+   ```
+
+4. **Or build and start the RoxDB local container:**
+
+   ```bash
+   # Build the Docker image and pass ROXDB_VERSION build argument
+   docker build --build-arg ROXDB_VERSION=1.0-SNAPSHOT -t roxdb .
+   # Run with default db path
+   docker run -P roxdb
+   # Run with custom db path/volume
+   docker run -P -e ROXDB_DB_PATH=/data/roxdb roxdb
+   ```
 
 ## Contributing
 

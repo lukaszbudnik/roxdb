@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 1000
+
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:9464
+        namespace: "rocksdb"
+        const_labels:
+          service: "rocks-db-service"
+
+    service:
+      pipelines:
+        metrics:
+          receivers: [ otlp ]
+          processors: [ batch ]
+          exporters: [ prometheus ]

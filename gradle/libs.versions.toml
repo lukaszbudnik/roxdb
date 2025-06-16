@@ -9,7 +9,7 @@ slf4j = "2.0.17"
 logback = "1.5.18"
 junit = "5.13.1"
 mockito = "5.18.0"
-bouncycastle = "1.80"
+bouncycastle = "1.81"
 opentelemetry = "1.51.0"
 jackson = "2.19.0"
 

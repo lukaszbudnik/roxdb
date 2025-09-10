@@ -11,7 +11,7 @@ junit = "5.13.4"
 mockito = "5.19.0"
 bouncycastle = "1.81"
 opentelemetry = "1.54.0"
-jackson = "2.19.2"
+jackson = "2.20.0"
 
 [libraries]
 rocksdb = { group = "org.rocksdb", name = "rocksdbjni", version.ref = "rocksdb" }

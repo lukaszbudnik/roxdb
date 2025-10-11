@@ -19,8 +19,17 @@ repositories {
 
 val mockitoAgent = configurations.create("mockitoAgent")
 
+val os = System.getProperty("os.name").lowercase()
+val classifier = when {
+    os.contains("mac") -> "osx"
+    os.contains("win") -> "win64"
+    else -> "linux64"
+}
+
+println("Detected OS: $os, RocksDB classifier: $classifier")
+
 dependencies {
-    implementation(libs.rocksdb)
+    implementation(libs.rocksdb.map { r -> "${r.group}:${r.name}:${r.version}:${classifier}" })
     implementation(libs.kryo)
     implementation(libs.commons.io)
 

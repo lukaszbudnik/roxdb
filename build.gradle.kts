@@ -3,7 +3,7 @@ plugins {
     id("com.google.protobuf") version ("0.9.4")
     id("jacoco")
     id("application")
-    id("com.gradleup.shadow") version "9.3.0"
+    id("com.gradleup.shadow") version "9.3.1"
 }
 
 group = "com.github.lukaszbudnik"

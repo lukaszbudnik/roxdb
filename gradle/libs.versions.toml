@@ -2,16 +2,16 @@
 rocksdb = "10.4.2"
 kryo = "5.6.2"
 commons-io = "2.21.0"
-protobuf = "4.33.2"
+protobuf = "4.33.4"
 grpc = "1.78.0"
 javax-annotation = "1.3.2"
 slf4j = "2.0.17"
-logback = "1.5.23"
-junit = "6.0.1"
+logback = "1.5.26"
+junit = "6.0.2"
 mockito = "5.21.0"
 bouncycastle = "1.83"
-opentelemetry = "1.57.0"
-jackson = "2.20.1"
+opentelemetry = "1.58.0"
+jackson = "2.21.0"
 
 [libraries]
 rocksdb = { group = "org.rocksdb", name = "rocksdbjni", version.ref = "rocksdb" }

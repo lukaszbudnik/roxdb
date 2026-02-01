@@ -29,7 +29,7 @@ val classifier = when {
 println("Detected OS: $os, RocksDB classifier: $classifier")
 
 dependencies {
-    implementation(libs.rocksdb.map { r -> "${r.group}:${r.name}:${r.version}:${classifier}" })
+    implementation(libs.rocksdb.map { "${it.group}:${it.name}:${it.version}:${classifier}" })
     implementation(libs.kryo)
     implementation(libs.commons.io)
 
@@ -66,11 +66,11 @@ java {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:4.33.4"
+        artifact = libs.protobuf.protoc.map { "${it.group}:${it.name}:${it.version}" }.get()
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.78.0"
+            artifact = libs.grpc.gen.map { "${it.group}:${it.name}:${it.version}" }.get()
         }
     }
     generateProtoTasks {

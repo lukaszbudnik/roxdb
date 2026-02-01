@@ -20,12 +20,14 @@ commons-io = { group = "commons-io", name = "commons-io", version.ref = "commons
 
 protobuf-java = { group = "com.google.protobuf", name = "protobuf-java", version.ref = "protobuf" }
 protobuf-java-util = { group = "com.google.protobuf", name = "protobuf-java-util", version.ref = "protobuf" }
+protobuf-protoc = { group = "com.google.protobuf", name = "protoc", version.ref = "protobuf" }
 
 grpc-protobuf = { group = "io.grpc", name = "grpc-protobuf", version.ref = "grpc" }
 grpc-services = { group = "io.grpc", name = "grpc-services", version.ref = "grpc" }
 grpc-stub = { group = "io.grpc", name = "grpc-stub", version.ref = "grpc" }
 grpc-netty-shaded = { group = "io.grpc", name = "grpc-netty-shaded", version.ref = "grpc" }
 grpc-inprocess = { group = "io.grpc", name = "grpc-inprocess", version.ref = "grpc" }
+grpc-gen = { group = "io.grpc", name = "protoc-gen-grpc-java", version.ref = "grpc" }
 
 javax-annotation = { group = "javax.annotation", name = "javax.annotation-api", version.ref = "javax-annotation" }
 
